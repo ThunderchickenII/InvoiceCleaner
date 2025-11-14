@@ -28,8 +28,8 @@
     .margin-cell { text-align: center; }
     .markup-green { color: #27ae60; font-weight: bold; }
     .markup-black { color: black; font-weight: bold; }
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
-    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 500px; max-height: 80vh; overflow-y: auto; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
     .modal label { display: block; margin: 10px 0 5px; font-weight: bold; }
     select, input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
     .modal button { margin: 5px; }
@@ -73,7 +73,7 @@
 
       <button id="btnAdd">Add / Update</button>
       <button id="btnDelete">Delete Selected</button>
-      <button id="btnCloseModal">Close</button>
+      <button id="btnClose15">Close</button>
 
       <h3>Current Rules</h3>
       <select id="lstMargins" size="10"></select>
@@ -81,29 +81,44 @@
   </div>
 
   <script>
-    // === AZURE AD CONFIG (CHANGE THESE) ===
+    // === AZURE AD CONFIG (UPDATE THESE) ===
     const msalConfig = {
       auth: {
         clientId: "f3833b57-b9c9-4700-ab29-af48f0810d28",  // ← Get from Azure Portal
         authority: "https://login.microsoftonline.com/07acaf92-4964-41e2-83b0-c107d4a66577",  // ← Your Tenant
-        redirectUri: "https://brave-plant-08d104a0f.3.azurestaticapps.net"
+        redirectUri: "https://brave-plant-08d104a0f.3.azurestaticapps.net", // ← Your Page
+      },
+      cache: {
+        cacheLocation: "localStorage",
+        storeAuthStateInCookie: true
       }
     };
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     let account = null;
 
-    // === LOGIN & MFA ===
+    // === LOGIN WITH MFA + SILENT FALLBACK ===
     async function loginAndOpenMargins() {
       try {
+        // Try silent login first
+        const silentRequest = {
+          scopes: ["User.Read"],
+          loginHint: account?.username
+        };
+        const silentResponse = await msalInstance.ssoSilent(silentRequest);
+        account = silentResponse.account;
+      } catch (silentError) {
+        // Fallback to popup
         const loginRequest = { scopes: ["User.Read"] };
         const response = await msalInstance.loginPopup(loginRequest);
         account = response.account;
-        document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
-        openMarginsModal();
-      } catch (error) {
-        alert("MFA failed or canceled. Access denied.");
-        console.error(error);
       }
+
+      document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
+      openMarginsModal();
+    } catch (error) {
+      alert("MFA failed or canceled. Access denied.");
+      console.error("MFA Error:", error);
+    }
     }
 
     document.getElementById('btnEditMargins').onclick = () => {
@@ -121,7 +136,7 @@
       document.getElementById('marginsModal').style.display = 'flex';
     }
 
-    // === MARGIN RULES (57) ===
+    // === 57 MARGIN RULES (AS % ADD-ON) ===
     let marginRules = [
       ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
       ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
@@ -264,9 +279,172 @@
       }
     };
 
-    // === REST OF CODE (IMPORT, FILTER, etc.) ===
-    // [Same as previous version — omitted for brevity]
-    // But includes: renderTable(), getMarginFor(), btnImport, filter, export
+    // === GLOBAL DATA ===
+    let allGroups = {};
+    let headers = [];
+    let extIdx = -1, serviceIdx = -1, skuIdx = -1;
+    let grandTotal = 0;
+    const statusDiv = document.getElementById('status');
+
+    // === IMPORT INVOICE ===
+    document.getElementById('btnImport').onclick = () => {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return alert("Select invoice file");
+
+      statusDiv.textContent = "Processing...";
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+
+          const sheetName = Object.keys(workbook.Sheets).find(name => 
+            name.toLowerCase().includes("consolidated")
+          );
+          if (!sheetName) throw new Error("No ConsolidatedInvoice sheet");
+
+          const sheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+          let headerRow = -1;
+          for (let i = 0; i < Math.min(json.length, 100); i++) {
+            if (json[i].some(cell => String(cell).toLowerCase().includes("sku"))) {
+              headerRow = i;
+              break;
+            }
+          }
+          if (headerRow === -1) throw new Error("Header row not found");
+
+          headers = json[headerRow];
+          const rows = json.slice(headerRow + 1);
+
+          const findCol = (names) => {
+            for (let i = 0; i < headers.length; i++) {
+              if (names.some(name => String(headers[i]).toLowerCase().includes(name.toLowerCase()))) return i;
+            }
+            return -1;
+          };
+
+          extIdx = findCol(["Extended Amount"]);
+          serviceIdx = findCol(["Service To"]);
+          skuIdx = findCol(["SKU"]);
+
+          if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) {
+            throw new Error("Missing required columns");
+          }
+
+          const validRows = rows.filter(r => {
+            const ext = r[extIdx];
+            return ext && parseFloat(ext) > 0 && !String(ext).includes('-');
+          });
+
+          if (validRows.length === 0) throw new Error("No valid rows after filtering");
+
+          grandTotal = 0;
+          allGroups = {};
+          validRows.forEach(r => {
+            const service = r[serviceIdx] || "Unknown";
+            if (!allGroups[service]) allGroups[service] = [];
+            allGroups[service].push(r);
+          });
+
+          const filterSelect = document.getElementById('filterService');
+          filterSelect.innerHTML = '<option value="">Show All</option>';
+          Object.keys(allGroups).sort().forEach(service => {
+            filterSelect.add(new Option(service, service));
+          });
+
+          statusDiv.textContent = `Imported ${validRows.length} rows.`;
+          renderTable();
+        } catch (err) {
+          statusDiv.textContent = "Error: " + err.message;
+          console.error(err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    };
+
+    // === FILTER & RENDER ===
+    document.getElementById('filterService').onchange = renderTable;
+
+    function renderTable() {
+      const selectedService = document.getElementById('filterService').value;
+      const groupsToShow = selectedService ? { [selectedService]: allGroups[selectedService] } : allGroups;
+
+      let html = `<table><thead><tr>`;
+      headers.forEach(h => html += `<th>${h}</th>`);
+      html += `<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
+
+      let filteredGrandTotal = 0;
+
+      Object.keys(groupsToShow).sort().forEach(service => {
+        let black = 0, green = 0;
+        groupsToShow[service].forEach(r => {
+          const ext = parseFloat(r[extIdx]) || 0;
+          const sku = r[skuIdx] || '';
+          const marginPct = getMarginFor(service, sku);
+          const margin = marginPct / 100;
+          const markup = ext * (1 + margin);
+
+          r.push(marginPct.toFixed(4));
+          r.push(markup.toFixed(2));
+
+          if (margin > 0) green += markup;
+          else black += markup;
+          filteredGrandTotal += markup;
+
+          html += `<tr>`;
+          r.forEach((cell, i) => {
+            if (i === serviceIdx) html += `<td class="service-to">${cell}</td>`;
+            else if (i === r.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${cell}</td>`;
+            else if (i === r.length - 2) html += `<td class="margin-cell">${cell}%</td>`;
+            else html += `<td>${cell}</td>`;
+          });
+          html += `</tr>`;
+        });
+
+        html += `<tr class="subtotal-black"><td colspan="${headers.length}">Subtotal (0% Margin)</td><td></td><td>${black.toFixed(2)}</td></tr>`;
+        html += `<tr class="subtotal-green"><td colspan="${headers.length}">Subtotal (Markup Applied)</td><td></td><td>${green.toFixed(2)}</td></tr>`;
+        html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black + green).toFixed(2)}</td></tr>`;
+      });
+
+      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGrandTotal.toFixed(2)}</td></tr>`;
+
+      html += `</tbody></table>`;
+      document.getElementById('output').innerHTML = html;
+    }
+
+    function getMarginFor(service, sku) {
+      for (const r of marginRules) {
+        const sMatch = r[0] === '*' || r[0] === service;
+        const kMatch = r[1] === '*' || r[1] === sku;
+        if (sMatch && kMatch) return r[2];
+      }
+      return 0;
+    }
+
+    document.getElementById('btnClear').onclick = () => {
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('fileInput').value = '';
+      document.getElementById('filterService').innerHTML = '<option value="">Show All</option>';
+      allGroups = {}; headers = []; extIdx = serviceIdx = skuIdx = -1;
+      statusDiv.textContent = '';
+    };
+
+    document.getElementById('btnExport').onclick = () => {
+      const table = document.querySelector('#output table');
+      if (!table) return alert("No data");
+      let csv = [];
+      table.querySelectorAll('tr').forEach(row => {
+        const cols = Array.from(row.cells).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
+        csv.push(cols.join(','));
+      });
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'invoice-markup.csv';
+      a.click();
+    };
   </script>
 </body>
 </html>
