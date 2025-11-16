@@ -160,7 +160,7 @@
 
     document.getElementById('btnCloseModal').onclick = () => modal.style.display = 'none';
 
-    // ... [rest of modal logic - same] ...
+    // ... [rest of modal logic] ...
 
     // === GLOBAL DATA ===
     let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1;
@@ -226,7 +226,7 @@
           Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
 
           statusDiv.textContent = `Imported ${validRows.length} rows.`;
-          renderTable();  // NOW SAFE TO CALL
+          renderTable();  // NOW SAFE
         } catch (err) {
           statusDiv.textContent = 'Error: ' + err.message;
           console.error(err);
@@ -236,7 +236,9 @@
     };
 
     // === RENDER TABLE ===
-    document.getElementById('filterService').onchange = renderTable;
+    document.getElementById('filterService').onchange = () => {
+      if (extIdx !== -1) renderTable();  // ONLY CALL IF DATA LOADED
+    };
 
     function renderTable() {
       const sel = document.getElementById('filterService').value;
