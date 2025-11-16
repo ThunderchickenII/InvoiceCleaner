@@ -81,265 +81,352 @@
   </div>
 
   <script>
-    // === AZURE AD CONFIG ===
-    const msalConfig = {
-      auth: {
-        clientId: "f3833b57-b9c9-4700-ab29-af48f0810d28",  // ← Get from Azure Portal
+    // === WAIT FOR DOM ===
+    document.addEventListener('DOMContentLoaded', () => {
+      // === AZURE AD CONFIG ===
+      const msalConfig = {
+        auth: {
+          clientId: "f3833b57-b9c9-4700-ab29-af48f0810d28",  // ← Get from Azure Portal
         authority: "https://login.microsoftonline.com/07acaf92-4964-41e2-83b0-c107d4a66577",  // ← Your Tenant
         redirectUri: "https://brave-plant-08d104a0f.3.azurestaticapps.net", // ← Your Page
-      },
-      cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
-    };
-    const msalInstance = new msal.PublicClientApplication(msalConfig);
-    let account = null;
+        },
+        cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: true }
+      };
+      const msalInstance = new msal.PublicClientApplication(msalConfig);
+      let account = null;
+      let isRedirecting = false;
 
-    // === HANDLE REDIRECT + RESTORE STATE ===
-    msalInstance.handleRedirectPromise()
-      .then(response => {
-        if (response) {
-          account = response.account;
-          document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
-          restoreState();  // Restore data + open modal
-        }
-      })
-      .catch(error => console.error("Redirect error:", error));
-
-    function loginAndOpenMargins() {
-      saveState();  // Save data before redirect
-      const loginRequest = { scopes: ["User.Read"] };
-      msalInstance.loginRedirect(loginRequest);
-    }
-
-    document.getElementById('btnEditMargins').onclick = () => {
-      if (account) openMarginsModal();
-      else loginAndOpenMargins();
-    };
-
-    // === MARGIN RULES ===
-    let marginRules = [ /* 57 rules - same as before */ ];
-
-    // === MODAL LOGIC ===
-    const modal = document.getElementById('marginsModal');
-    const cboService = document.getElementById('cboService');
-    const cboSKU = document.getElementById('cboSKU');
-    const txtMargin = document.getElementById('txtMargin');
-    const lstMargins = document.getElementById('lstMargins');
-
-    function loadDropdowns() {
-      const services = new Set(marginRules.map(r => r[0]).filter(Boolean));
-      const skus = new Set(marginRules.map(r => r[1]).filter(Boolean));
-      services.add('*'); skus.add('*');
-
-      cboService.innerHTML = '';
-      [...services].sort().forEach(s => cboService.add(new Option(s, s)));
-
-      cboSKU.innerHTML = '';
-      [...skus].sort().forEach(s => cboSKU.add(new Option(s, s)));
-    }
-
-    function loadMarginsList() {
-      lstMargins.innerHTML = '';
-      marginRules.forEach((r, i) => {
-        const opt = new Option(`${r[0]} | ${r[1]} | ${r[2].toFixed(4)}%`, i);
-        lstMargins.add(opt);
-      });
-    }
-
-    function clearForm() {
-      cboService.value = ''; cboSKU.value = ''; txtMargin.value = ''; lstMargins.selectedIndex = -1;
-    }
-
-    function openMarginsModal() {
-      loadDropdowns(); loadMarginsList(); clearForm();
-      modal.style.display = 'flex';
-    }
-
-    document.getElementById('btnCloseModal').onclick = () => modal.style.display = 'none';
-
-    // ... [rest of modal logic] ...
-
-    // === GLOBAL DATA ===
-    let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1;
-    const statusDiv = document.getElementById('status');
-
-    // === SAVE / RESTORE STATE ===
-    function saveState() {
-      const state = { allGroups, headers, extIdx, serviceIdx, skuIdx };
-      localStorage.setItem('invoiceState', JSON.stringify(state));
-    }
-
-    function restoreState() {
-      const saved = localStorage.getItem('invoiceState');
-      if (saved) {
-        const state = JSON.parse(saved);
-        allGroups = state.allGroups || {};
-        headers = state.headers || [];
-        extIdx = state.extIdx;
-        serviceIdx = state.serviceIdx;
-        skuIdx = state.skuIdx;
-
-        const filter = document.getElementById('filterService');
-        filter.innerHTML = '<option value="">Show All</option>';
-        Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
-
-        renderTable();
-        openMarginsModal();  // OPEN MODAL AFTER RESTORE
-        localStorage.removeItem('invoiceState');  // Clean up
-      }
-    }
-
-    // === IMPORT INVOICE ===
-    document.getElementById('btnImport').onclick = () => {
-      const file = document.getElementById('fileInput').files[0];
-      if (!file) return alert("Select file");
-
-      statusDiv.textContent = "Processing...";
-      const reader = new FileReader();
-      reader.onload = e => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const wb = XLSX.read(data, { type: 'array' });
-
-          const sheetName = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('consolidated'));
-          if (!sheetName) throw new Error('No ConsolidatedInvoice sheet');
-
-          const sheet = wb.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-
-          let headerRow = -1;
-          for (let i = 0; i < Math.min(json.length, 100); i++) {
-            if (json[i].some(c => String(c).toLowerCase().includes('sku'))) {
-              headerRow = i; break;
-            }
+      // === HANDLE REDIRECT ONCE ===
+      msalInstance.handleRedirectPromise()
+        .then(response => {
+          if (response) {
+            account = response.account;
+            document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
+            openMarginsModal();
           }
-          if (headerRow === -1) throw new Error('Header row not found');
+        })
+        .catch(error => console.error("Redirect error:", error));
 
-          headers = json[headerRow];
-          const rows = json.slice(headerRow + 1);
+      // === LOGIN ONLY ONCE ===
+      function loginAndOpenMargins() {
+        if (isRedirecting) return;
+        isRedirecting = true;
+        const loginRequest = { scopes: ["User.Read"] };
+        msalInstance.loginRedirect(loginRequest);
+      }
 
-          const findCol = names => {
-            for (let i = 0; i < headers.length; i++) {
-              if (names.some(n => String(headers[i]).toLowerCase().includes(n.toLowerCase()))) return i;
-            }
-            return -1;
-          };
-
-          extIdx = findCol(['Extended Amount']);
-          serviceIdx = findCol(['Service To']);
-          skuIdx = findCol(['SKU']);
-          if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) throw new Error('Missing required columns');
-
-          const validRows = rows.filter(r => {
-            const ext = r[extIdx];
-            return ext && parseFloat(ext) > 0 && !String(ext).includes('-');
-          });
-
-          if (validRows.length === 0) throw new Error('No valid rows');
-
-          allGroups = {};
-          validRows.forEach(r => {
-            const service = r[serviceIdx] || 'Unknown';
-            if (!allGroups[service]) allGroups[service] = [];
-            allGroups[service].push(r);
-          });
-
-          const filter = document.getElementById('filterService');
-          filter.innerHTML = '<option value="">Show All</option>';
-          Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
-
-          statusDiv.textContent = `Imported ${validRows.length} rows.`;
-          renderTable();
-        } catch (err) {
-          statusDiv.textContent = 'Error: ' + err.message;
-          console.error(err);
+      document.getElementById('btnEditMargins').onclick = () => {
+        if (account) {
+          openMarginsModal();
+        } else {
+          loginAndOpenMargins();
         }
       };
-      reader.readAsArrayBuffer(file);
-    };
 
-    // === RENDER TABLE ===
-    document.getElementById('filterService').onchange = () => {
-      if (extIdx !== -1) renderTable();
-    };
+      // === MARGIN RULES ===
+      let marginRules = [
+        ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
+        ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
+        ["GUILD MORTGAGE","A-FLEX-WCC-S-N-O",116.98],
+        ["GUILD MORTGAGE","A-FLEX-WCC-P-N-O",116.98],
+        ["GUILD MORTGAGE","SVS-CSS-SUPT-SSPT",20],
+        ["GUILD MORTGAGE","A-FLEX-EACL",51.92],
+        ["GUILD MORTGAGE","A-FLEX-WCC-P-N",49.1],
+        ["GUILD MORTGAGE","A-FLEX-WCC-S-N",49.1],
+        ["GUILD MORTGAGE","A-AUD-PSTN-IBTF",0],
+        ["GUILD MORTGAGE","A-AUD-U-IBTF",0],
+        ["GUILD MORTGAGE","A-AUD-OCP1-U",0],
+        ["GUILD MORTGAGE","A-AUD-U-TN",0],
+        ["GUILD MORTGAGE","A-CHAN-U-V-FRUS-OB",0],
+        ["GUILD MORTGAGE","A-CHAN-V-PORTS",0],
+        ["GUILD MORTGAGE","A-FLEX-WCE-E",0],
+        ["PGT INNOVATIONS","A-FLEX-WCC-S-N-O",171.4],
+        ["PGT INNOVATIONS","A-FLEX-WCC-P-N-O",171.4],
+        ["PGT INNOVATIONS","SVS-CSS-SUPT-SSPT",120],
+        ["PGT INNOVATIONS","A-FLEX-EACL",50.99],
+        ["PGT INNOVATIONS","A-FLEX-WCC-P-N",0],
+        ["PGT INNOVATIONS","A-FLEX-WCC-S-N",0],
+        ["PGT INNOVATIONS","A-AUD-PSTN-IBTF",0],
+        ["PGT INNOVATIONS","A-AUD-U-IBTF",0],
+        ["PGT INNOVATIONS","A-AUD-OCP1-U",0],
+        ["PGT INNOVATIONS","A-AUD-U-TN",0],
+        ["PGT INNOVATIONS","A-CHAN-U-V-FRUS-OB",0],
+        ["PGT INNOVATIONS","A-CHAN-V-PORTS",0],
+        ["PGT INNOVATIONS","A-FLEX-WCE-E",116.22],
+        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N-O",43.75],
+        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N-O",43.75],
+        ["LYNN COMMUNITY HEALTH CENTER","SVS-CSS-SUPT-SSPT",20],
+        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-EACL",92.31],
+        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N",46.55],
+        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N",71.37],
+        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-PSTN-IBTF",0],
+        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-IBTF",0],
+        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-OCP1-U",0],
+        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-TN",0],
+        ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-U-V-FRUS-OB",0],
+        ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-V-PORTS",0],
+        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCE-E",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-C",21.7],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-C",21.7],
+        ["ROEHL TRANSPORTHARVEY MILLER","SVS-CSS-SUPT-SSPT",120],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-EACL",21.7],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-N",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-N",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-PSTN-IBTF",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-U-IBTF",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-OCP1-U",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-U-TN",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-U-V-FRUS-OB",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-V-PORTS",0],
+        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCE-E",0],
+        ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-E",69.58],
+        ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",92.31]
+      ];
 
-    function renderTable() {
-      const sel = document.getElementById('filterService').value;
-      const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
+      // === MODAL LOGIC ===
+      const modal = document.getElementById('marginsModal');
+      const cboService = document.getElementById('cboService');
+      const cboSKU = document.getElementById('cboSKU');
+      const txtMargin = document.getElementById('txtMargin');
+      const lstMargins = document.getElementById('lstMargins');
 
-      let html = `<table><thead><tr>`;
-      headers.forEach(h => html += `<th>${h}</th>`);
-      html += `<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
+      function loadDropdowns() {
+        const services = new Set(marginRules.map(r => r[0]).filter(Boolean));
+        const skus = new Set(marginRules.map(r => r[1]).filter(Boolean));
+        services.add('*'); skus.add('*');
 
-      let filteredGT = 0;
-      Object.keys(groups).sort().forEach(service => {
-        let black = 0, green = 0;
-        groups[service].forEach(r => {
-          const ext = parseFloat(r[extIdx]) || 0;
-          const sku = r[skuIdx] || '';
-          const marginPct = getMarginFor(service, sku);
-          const margin = marginPct / 100;
-          const markup = ext * (1 + margin);
+        cboService.innerHTML = '';
+        [...services].sort().forEach(s => cboService.add(new Option(s, s)));
 
-          r.push(marginPct.toFixed(4));
-          r.push(markup.toFixed(2));
+        cboSKU.innerHTML = '';
+        [...skus].sort().forEach(s => cboSKU.add(new Option(s, s)));
+      }
 
-          if (margin > 0) green += markup;
-          else black += markup;
-          filteredGT += markup;
+      function loadMarginsList() {
+        lstMargins.innerHTML = '';
+        marginRules.forEach((r, i) => {
+          const opt = new Option(`${r[0]} | ${r[1]} | ${r[2].toFixed(4)}%`, i);
+          lstMargins.add(opt);
+        });
+      }
 
-          html += `<tr>`;
-          r.forEach((c, i) => {
-            if (i === serviceIdx) html += `<td class="service-to">${c}</td>`;
-            else if (i === r.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${c}</td>`;
-            else if (i === r.length - 2) html += `<td class="margin-cell">${c}%</td>`;
-            else html += `<td>${c}</td>`;
+      function clearForm() {
+        cboService.value = ''; cboSKU.value = ''; txtMargin.value = ''; lstMargins.selectedIndex = -1;
+      }
+
+      function openMarginsModal() {
+        loadDropdowns(); loadMarginsList(); clearForm();
+        modal.style.display = 'flex';
+      }
+
+      document.getElementById('btnCloseModal').onclick = () => modal.style.display = 'none';
+
+      document.getElementById('btnAdd').onclick = () => {
+        const service = cboService.value.trim();
+        const sku = cboSKU.value.trim();
+        const marginText = txtMargin.value.trim();
+
+        if (!service || !sku) return alert("Service To and SKU required");
+        if (!/^\d*\.?\d*$/.test(marginText)) return alert("Margin must be a number (e.g. 49.1)");
+
+        const margin = parseFloat(marginText);
+        const existing = marginRules.findIndex(r => r[0] === service && r[1] === sku);
+        if (existing >= 0) {
+          marginRules[existing][2] = margin;
+          alert("Updated");
+        } else {
+          marginRules.push([service, sku, margin]);
+          alert("Added");
+        }
+        loadDropdowns();
+        loadMarginsList();
+        clearForm();
+      };
+
+      document.getElementById('btnDelete').onclick = () => {
+        const idx = lstMargins.selectedIndex;
+        if (idx === -1) return alert("Select a rule");
+        marginRules.splice(idx, 1);
+        loadMarginsList();
+        loadDropdowns();
+        clearForm();
+      };
+
+      lstMargins.onclick = () => {
+        const idx = lstMargins.selectedIndex;
+        if (idx === -1) return;
+        const r = marginRules[idx];
+        cboService.value = r[0];
+        cboSKU.value = r[1];
+        txtMargin.value = r[2].toFixed(4);
+      };
+
+      cboService.onkeydown = cboSKU.onkeydown = e => {
+        if (e.key === 'Enter') {
+          const val = e.target.value.trim();
+          if (val && ![...e.target.options].some(o => o.value === val)) {
+            e.target.add(new Option(val, val));
+            e.target.value = val;
+          }
+        }
+      };
+
+      // === GLOBAL DATA ===
+      let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1;
+      const statusDiv = document.getElementById('status');
+
+      // === IMPORT INVOICE ===
+      document.getElementById('btnImport').onclick = () => {
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return alert("Select file");
+
+        statusDiv.textContent = "Processing...";
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const wb = XLSX.read(data, { type: 'array' });
+
+            const sheetName = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('consolidated'));
+            if (!sheetName) throw new Error('No ConsolidatedInvoice sheet');
+
+            const sheet = wb.Sheets[sheetName];
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+            let headerRow = -1;
+            for (let i = 0; i < Math.min(json.length, 100); i++) {
+              if (json[i].some(c => String(c).toLowerCase().includes('sku'))) {
+                headerRow = i; break;
+              }
+            }
+            if (headerRow === -1) throw new Error('Header row not found');
+
+            headers = json[headerRow];
+            const rows = json.slice(headerRow + 1);
+
+            const findCol = names => {
+              for (let i = 0; i < headers.length; i++) {
+                if (names.some(n => String(headers[i]).toLowerCase().includes(n.toLowerCase()))) return i;
+              }
+              return -1;
+            };
+
+            extIdx = findCol(['Extended Amount']);
+            serviceIdx = findCol(['Service To']);
+            skuIdx = findCol(['SKU']);
+            if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) throw new Error('Missing required columns');
+
+            const validRows = rows.filter(r => {
+              const ext = r[extIdx];
+              return ext && parseFloat(ext) > 0 && !String(ext).includes('-');
+            });
+
+            if (validRows.length === 0) throw new Error('No valid rows');
+
+            allGroups = {};
+            validRows.forEach(r => {
+              const service = r[serviceIdx] || 'Unknown';
+              if (!allGroups[service]) allGroups[service] = [];
+              allGroups[service].push(r);
+            });
+
+            const filter = document.getElementById('filterService');
+            filter.innerHTML = '<option value="">Show All</option>';
+            Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
+
+            statusDiv.textContent = `Imported ${validRows.length} rows.`;
+            renderTable();
+          } catch (err) {
+            statusDiv.textContent = 'Error: ' + err.message;
+            console.error(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      };
+
+      // === RENDER TABLE ===
+      document.getElementById('filterService').onchange = () => {
+        if (extIdx !== -1) renderTable();
+      };
+
+      function renderTable() {
+        const sel = document.getElementById('filterService').value;
+        const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
+
+        let html = `<table><thead><tr>`;
+        headers.forEach(h => html += `<th>${h}</th>`);
+        html += `<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
+
+        let filteredGT = 0;
+        Object.keys(groups).sort().forEach(service => {
+          let black = 0, green = 0;
+          groups[service].forEach(r => {
+            const ext = parseFloat(r[extIdx]) || 0;
+            const sku = r[skuIdx] || '';
+            const marginPct = getMarginFor(service, sku);
+            const margin = marginPct / 100;
+            const markup = ext * (1 + margin);
+
+            r.push(marginPct.toFixed(4));
+            r.push(markup.toFixed(2));
+
+            if (margin > 0) green += markup;
+            else black += markup;
+            filteredGT += markup;
+
+            html += `<tr>`;
+            r.forEach((c, i) => {
+              if (i === serviceIdx) html += `<td class="service-to">${c}</td>`;
+              else if (i === r.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${c}</td>`;
+              else if (i === r.length - 2) html += `<td class="margin-cell">${c}%</td>`;
+              else html += `<td>${c}</td>`;
+            });
+            html += `</tr>`;
           });
-          html += `</tr>`;
+
+          html += `<tr class="subtotal-black"><td colspan="${headers.length}">Subtotal (0% Margin)</td><td></td><td>${black.toFixed(2)}</td></tr>`;
+          html += `<tr class="subtotal-green"><td colspan="${headers.length}">Subtotal (Markup Applied)</td><td></td><td>${green.toFixed(2)}</td></tr>`;
+          html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black + green).toFixed(2)}</td></tr>`;
         });
 
-        html += `<tr class="subtotal-black"><td colspan="${headers.length}">Subtotal (0% Margin)</td><td></td><td>${black.toFixed(2)}</td></tr>`;
-        html += `<tr class="subtotal-green"><td colspan="${headers.length}">Subtotal (Markup Applied)</td><td></td><td>${green.toFixed(2)}</td></tr>`;
-        html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black + green).toFixed(2)}</td></tr>`;
-      });
-
-      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
-      html += `</tbody></table>`;
-      document.getElementById('output').innerHTML = html;
-    }
-
-    function getMarginFor(service, sku) {
-      for (const r of marginRules) {
-        const sMatch = r[0] === '*' || r[0] === service;
-        const kMatch = r[1] === '*' || r[1] === sku;
-        if (sMatch && kMatch) return r[2];
+        html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
+        html += `</tbody></table>`;
+        document.getElementById('output').innerHTML = html;
       }
-      return 0;
-    }
 
-    // === CLEAR & EXPORT ===
-    document.getElementById('btnClear').onclick = () => {
-      document.getElementById('output').innerHTML = '';
-      document.getElementById('fileInput').value = '';
-      document.getElementById('filterService').innerHTML = '<option value="">Show All</option>';
-      allGroups = {}; headers = []; extIdx = serviceIdx = skuIdx = -1;
-      statusDiv.textContent = '';
-      localStorage.removeItem('invoiceState');
-    };
+      function getMarginFor(service, sku) {
+        for (const r of marginRules) {
+          const sMatch = r[0] === '*' || r[0] === service;
+          const kMatch = r[1] === '*' || r[1] === sku;
+          if (sMatch && kMatch) return r[2];
+        }
+        return 0;
+      }
 
-    document.getElementById('btnExport').onclick = () => {
-      const tbl = document.querySelector('#output table');
-      if (!tbl) return alert('No data');
-      let csv = [];
-      tbl.querySelectorAll('tr').forEach(row => {
-        const cols = Array.from(row.cells).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
-        csv.push(cols.join(','));
-      });
-      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'invoice-markup.csv';
-      a.click();
-    };
+      // === CLEAR & EXPORT ===
+      document.getElementById('btnClear').onclick = () => {
+        document.getElementById('output').innerHTML = '';
+        document.getElementById('fileInput').value = '';
+        document.getElementById('filterService').innerHTML = '<option value="">Show All</option>';
+        allGroups = {}; headers = []; extIdx = serviceIdx = skuIdx = -1;
+        statusDiv.textContent = '';
+      };
+
+      document.getElementById('btnExport').onclick = () => {
+        const tbl = document.querySelector('#output table');
+        if (!tbl) return alert('No data');
+        let csv = [];
+        tbl.querySelectorAll('tr').forEach(row => {
+          const cols = Array.from(row.cells).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
+          csv.push(cols.join(','));
+        });
+        const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'invoice-markup.csv';
+        a.click();
+      };
+    });
   </script>
 </body>
 </html>
