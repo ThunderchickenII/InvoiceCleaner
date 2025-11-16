@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Invoice Markup Tool - MFA Protected</title>
+  <title>Invoice Markup Tool - MFA</title>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
   <style>
@@ -73,7 +73,7 @@
 
       <button id="btnAdd">Add / Update</button>
       <button id="btnDelete">Delete Selected</button>
-      <button id="btnClose15">Close</button>
+      <button id="btnCloseModal">Close</button>
 
       <h3>Current Rules</h3>
       <select id="lstMargins" size="10"></select>
@@ -88,55 +88,31 @@
         authority: "https://login.microsoftonline.com/07acaf92-4964-41e2-83b0-c107d4a66577",  // ← Your Tenant
         redirectUri: "https://brave-plant-08d104a0f.3.azurestaticapps.net", // ← Your Page
       },
-      cache: {
-        cacheLocation: "localStorage",
-        storeAuthStateInCookie: true
-      }
+      cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
     };
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     let account = null;
 
-    // === LOGIN WITH MFA + SILENT FALLBACK ===
+    // === LOGIN WITH MFA ===
     async function loginAndOpenMargins() {
       try {
-        // Try silent login first
-        const silentRequest = {
-          scopes: ["User.Read"],
-          loginHint: account?.username
-        };
-        const silentResponse = await msalInstance.ssoSilent(silentRequest);
-        account = silentResponse.account;
-      } catch (silentError) {
-        // Fallback to popup
         const loginRequest = { scopes: ["User.Read"] };
         const response = await msalInstance.loginPopup(loginRequest);
         account = response.account;
+        document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
+        openMarginsModal();
+      } catch (error) {
+        alert("MFA failed or canceled. Access denied.");
+        console.error(error);
       }
-
-      document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
-      openMarginsModal();
-    } catch (error) {
-      alert("MFA failed or canceled. Access denied.");
-      console.error("MFA Error:", error);
-    }
     }
 
     document.getElementById('btnEditMargins').onclick = () => {
-      if (account) {
-        openMarginsModal();
-      } else {
-        loginAndOpenMargins();
-      }
+      if (account) openMarginsModal();
+      else loginAndOpenMargins();
     };
 
-    function openMarginsModal() {
-      loadDropdowns();
-      loadMarginsList();
-      clearForm();
-      document.getElementById('marginsModal').style.display = 'flex';
-    }
-
-    // === 57 MARGIN RULES (AS % ADD-ON) ===
+    // === MARGIN RULES (57) ===
     let marginRules = [
       ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
       ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
@@ -196,7 +172,7 @@
       ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",92.31]
     ];
 
-    // === MODAL LOGIC ===
+    // === MODAL ===
     const modal = document.getElementById('marginsModal');
     const cboService = document.getElementById('cboService');
     const cboSKU = document.getElementById('cboSKU');
@@ -225,6 +201,13 @@
 
     function clearForm() {
       cboService.value = ''; cboSKU.value = ''; txtMargin.value = ''; lstMargins.selectedIndex = -1;
+    }
+
+    function openMarginsModal() {
+      loadDropdowns();
+      loadMarginsList();
+      clearForm();
+      modal.style.display = 'flex';
     }
 
     document.getElementById('btnCloseModal').onclick = () => modal.style.display = 'none';
@@ -280,106 +263,94 @@
     };
 
     // === GLOBAL DATA ===
-    let allGroups = {};
-    let headers = [];
-    let extIdx = -1, serviceIdx = -1, skuIdx = -1;
-    let grandTotal = 0;
+    let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1, grandTotal = 0;
     const statusDiv = document.getElementById('status');
 
-    // === IMPORT INVOICE ===
+    // === IMPORT ===
     document.getElementById('btnImport').onclick = () => {
       const file = document.getElementById('fileInput').files[0];
-      if (!file) return alert("Select invoice file");
+      if (!file) return alert("Select file");
 
       statusDiv.textContent = "Processing...";
       const reader = new FileReader();
       reader.onload = e => {
         try {
           const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
+          const wb = XLSX.read(data, { type: 'array' });
 
-          const sheetName = Object.keys(workbook.Sheets).find(name => 
-            name.toLowerCase().includes("consolidated")
-          );
-          if (!sheetName) throw new Error("No ConsolidatedInvoice sheet");
+          const sheetName = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('consolidated'));
+          if (!sheetName) throw new Error('No ConsolidatedInvoice sheet');
 
-          const sheet = workbook.Sheets[sheetName];
-          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          const sheet = wb.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
           let headerRow = -1;
           for (let i = 0; i < Math.min(json.length, 100); i++) {
-            if (json[i].some(cell => String(cell).toLowerCase().includes("sku"))) {
-              headerRow = i;
-              break;
+            if (json[i].some(c => String(c).toLowerCase().includes('sku'))) {
+              headerRow = i; break;
             }
           }
-          if (headerRow === -1) throw new Error("Header row not found");
+          if (headerRow === -1) throw new Error('Header row not found');
 
           headers = json[headerRow];
           const rows = json.slice(headerRow + 1);
 
-          const findCol = (names) => {
+          const findCol = names => {
             for (let i = 0; i < headers.length; i++) {
-              if (names.some(name => String(headers[i]).toLowerCase().includes(name.toLowerCase()))) return i;
+              if (names.some(n => String(headers[i]).toLowerCase().includes(n.toLowerCase()))) return i;
             }
             return -1;
           };
 
-          extIdx = findCol(["Extended Amount"]);
-          serviceIdx = findCol(["Service To"]);
-          skuIdx = findCol(["SKU"]);
-
-          if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) {
-            throw new Error("Missing required columns");
-          }
+          extIdx = findCol(['Extended Amount']);
+          serviceIdx = findCol(['Service To']);
+          skuIdx = findCol(['SKU']);
+          if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) throw new Error('Missing required columns');
 
           const validRows = rows.filter(r => {
             const ext = r[extIdx];
             return ext && parseFloat(ext) > 0 && !String(ext).includes('-');
           });
 
-          if (validRows.length === 0) throw new Error("No valid rows after filtering");
+          if (validRows.length === 0) throw new Error('No valid rows');
 
           grandTotal = 0;
           allGroups = {};
           validRows.forEach(r => {
-            const service = r[serviceIdx] || "Unknown";
+            const service = r[serviceIdx] || 'Unknown';
             if (!allGroups[service]) allGroups[service] = [];
             allGroups[service].push(r);
           });
 
-          const filterSelect = document.getElementById('filterService');
-          filterSelect.innerHTML = '<option value="">Show All</option>';
-          Object.keys(allGroups).sort().forEach(service => {
-            filterSelect.add(new Option(service, service));
-          });
+          const filter = document.getElementById('filterService');
+          filter.innerHTML = '<option value="">Show All</option>';
+          Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
 
           statusDiv.textContent = `Imported ${validRows.length} rows.`;
           renderTable();
         } catch (err) {
-          statusDiv.textContent = "Error: " + err.message;
+          statusDiv.textContent = 'Error: ' + err.message;
           console.error(err);
         }
       };
       reader.readAsArrayBuffer(file);
     };
 
-    // === FILTER & RENDER ===
+    // === RENDER TABLE ===
     document.getElementById('filterService').onchange = renderTable;
 
     function renderTable() {
-      const selectedService = document.getElementById('filterService').value;
-      const groupsToShow = selectedService ? { [selectedService]: allGroups[selectedService] } : allGroups;
+      const sel = document.getElementById('filterService').value;
+      const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
 
       let html = `<table><thead><tr>`;
       headers.forEach(h => html += `<th>${h}</th>`);
       html += `<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
 
-      let filteredGrandTotal = 0;
-
-      Object.keys(groupsToShow).sort().forEach(service => {
+      let filteredGT = 0;
+      Object.keys(groups).sort().forEach(service => {
         let black = 0, green = 0;
-        groupsToShow[service].forEach(r => {
+        groups[service].forEach(r => {
           const ext = parseFloat(r[extIdx]) || 0;
           const sku = r[skuIdx] || '';
           const marginPct = getMarginFor(service, sku);
@@ -391,14 +362,14 @@
 
           if (margin > 0) green += markup;
           else black += markup;
-          filteredGrandTotal += markup;
+          filteredGT += markup;
 
           html += `<tr>`;
-          r.forEach((cell, i) => {
-            if (i === serviceIdx) html += `<td class="service-to">${cell}</td>`;
-            else if (i === r.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${cell}</td>`;
-            else if (i === r.length - 2) html += `<td class="margin-cell">${cell}%</td>`;
-            else html += `<td>${cell}</td>`;
+          r.forEach((c, i) => {
+            if (i === serviceIdx) html += `<td class="service-to">${c}</td>`;
+            else if (i === r.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${c}</td>`;
+            else if (i === r.length - 2) html += `<td class="margin-cell">${c}%</td>`;
+            else html += `<td>${c}</td>`;
           });
           html += `</tr>`;
         });
@@ -408,8 +379,7 @@
         html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black + green).toFixed(2)}</td></tr>`;
       });
 
-      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGrandTotal.toFixed(2)}</td></tr>`;
-
+      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
       html += `</tbody></table>`;
       document.getElementById('output').innerHTML = html;
     }
@@ -423,6 +393,7 @@
       return 0;
     }
 
+    // === CLEAR & EXPORT ===
     document.getElementById('btnClear').onclick = () => {
       document.getElementById('output').innerHTML = '';
       document.getElementById('fileInput').value = '';
@@ -432,10 +403,10 @@
     };
 
     document.getElementById('btnExport').onclick = () => {
-      const table = document.querySelector('#output table');
-      if (!table) return alert("No data");
+      const tbl = document.querySelector('#output table');
+      if (!tbl) return alert('No data');
       let csv = [];
-      table.querySelectorAll('tr').forEach(row => {
+      tbl.querySelectorAll('tr').forEach(row => {
         const cols = Array.from(row.cells).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
         csv.push(cols.join(','));
       });
