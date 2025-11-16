@@ -81,7 +81,6 @@
   </div>
 
   <script>
-    // === WAIT FOR DOM ===
     document.addEventListener('DOMContentLoaded', () => {
       // === AZURE AD CONFIG ===
       const msalConfig = {
@@ -94,33 +93,34 @@
       };
       const msalInstance = new msal.PublicClientApplication(msalConfig);
       let account = null;
-      let isRedirecting = false;
 
-      // === HANDLE REDIRECT ONCE ===
+      // === CHECK IF WE SHOULD OPEN MODAL AFTER LOGIN ===
+      if (sessionStorage.getItem('openMargins') === 'true') {
+        sessionStorage.removeItem('openMargins');
+        openMarginsModal();
+      }
+
+      // === HANDLE REDIRECT ===
       msalInstance.handleRedirectPromise()
         .then(response => {
           if (response) {
             account = response.account;
             document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
-            openMarginsModal();
+            // Modal already opened by sessionStorage flag
           }
         })
         .catch(error => console.error("Redirect error:", error));
 
-      // === LOGIN ONLY ONCE ===
+      // === LOGIN + OPEN MODAL ===
       function loginAndOpenMargins() {
-        if (isRedirecting) return;
-        isRedirecting = true;
+        sessionStorage.setItem('openMargins', 'true');
         const loginRequest = { scopes: ["User.Read"] };
         msalInstance.loginRedirect(loginRequest);
       }
 
       document.getElementById('btnEditMargins').onclick = () => {
-        if (account) {
-          openMarginsModal();
-        } else {
-          loginAndOpenMargins();
-        }
+        if (account) openMarginsModal();
+        else loginAndOpenMargins();
       };
 
       // === MARGIN RULES ===
