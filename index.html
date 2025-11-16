@@ -3,54 +3,51 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Invoice Markup Tool – MFA</title>
-
-  <!-- XLSX & MSAL -->
+  <title>Invoice Markup Tool</title>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
-
   <style>
-    body{font-family:'Segoe UI',sans-serif;margin:20px;background:#f9f9fb;}
-    .container{max-width:1400px;margin:auto;}
-    .controls{margin:20px 0;padding:15px;background:#fff;border-radius:8px;box-shadow:0 2px 5px rgba(0,0,0,.1);display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-    button{padding:10px 20px;border:none;border-radius:5px;cursor:pointer;font-weight:bold;}
-    #btnImport{background:#27ae60;color:#fff;}
-    #btnClear{background:#c0392b;color:#fff;}
-    #btnExport{background:#2980b9;color:#fff;}
-    #btnEditMargins{background:#8e44ad;color:#fff;}
-    input[type=file],select{padding:8px;border:1px solid #ccc;border-radius:4px;}
-    label{font-weight:bold;}
-    table{width:100%;border-collapse:collapse;margin-top:20px;background:#fff;font-size:.9em;}
-    th,td{border:1px solid #ddd;padding:6px;text-align:right;}
-    th{background:#34495e;color:#fff;position:sticky;top:0;font-size:.8em;}
-    .service-to{text-align:left!important;font-weight:bold;}
-    .subtotal-black td{font-weight:bold;background:#f8f8f8;}
-    .subtotal-green td{font-weight:bold;color:#27ae60;background:#e8f5e8;}
-    .group-total td{font-weight:bold;background:#fff3cd;}
-    .grand-total td{font-weight:bold;font-size:1.1em;background:#d4edda;color:#155724;}
-    .margin-cell{text-align:center;}
-    .markup-green{color:#27ae60;font-weight:bold;}
-    .markup-black{color:black;font-weight:bold;}
-    .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);justify-content:center;align-items:center;z-index:1000;}
-    .modal-content{background:#fff;padding:20px;border-radius:8px;width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 4px 20px rgba(0,0,0,.2);}
-    .modal label{display:block;margin:10px 0 5px;font-weight:bold;}
-    select,input{width:100%;padding:8px;margin-bottom:10px;border:1px solid #ccc;border-radius:4px;}
-    .modal button{margin:5px;}
-    #lstMargins{width:100%;height:200px;margin:10px 0;}
-    #status{margin-top:10px;font-style:italic;color:#555;}
-    #userInfo{margin-left:10px;color:#2c3e50;font-size:.9em;}
+    body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f9f9fb; }
+    .container { max-width: 1400px; margin: auto; }
+    .controls { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+    #btnImport { background: #27ae60; color: white; }
+    #btnClear { background: #c0392b; color: white; }
+    #btnExportCSV { background: #2980b9; color: white; }
+    #btnExportExcel { background: #f39c12; color: white; }
+    #btnEditMargins { background: #8e44ad; color: white; }
+    input[type="file"], select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+    label { font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 0.9em; }
+    th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
+    th { background: #34495e; color: white; position: sticky; top: 0; font-size: 0.8em; }
+    .service-to { text-align: left !important; font-weight: bold; }
+    .subtotal-black td { font-weight: bold; background: #f8f8f8; }
+    .subtotal-green td { font-weight: bold; color: #27ae60; background: #e8f5e8; }
+    .group-total td { font-weight: bold; background: #fff3cd; }
+    .grand-total td { font-weight: bold; font-size: 1.1em; background: #d4edda; color: #155724; }
+    .margin-cell { text-align: center; }
+    .markup-green { color: #27ae60; font-weight: bold; }
+    .markup-black { color: black; font-weight: bold; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+    .modal-content { background: white; padding: 20px; border-radius: 8px; width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+    .modal label { display: block; margin: 10px 0 5px; font-weight: bold; }
+    select, input { width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
+    .modal button { margin: 5px; }
+    #lstMargins { width: 100%; height: 200px; margin: 10px 0; }
+    #status { margin-top: 10px; font-style: italic; color: #555; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Invoice Markup Tool <span id="userInfo"></span></h1>
+    <h1>Invoice Markup Tool</h1>
 
     <div class="controls">
-      <input type="file" id="fileInput" accept=".xlsx"/>
+      <input type="file" id="fileInput" accept=".xlsx" />
       <button id="btnImport">Import Invoice</button>
       <button id="btnClear">Clear Data</button>
-      <button id="btnExport">Export CSV</button>
-      <button id="btnEditMargins">Edit Margins (MFA Required)</button>
+      <button id="btnExportCSV">Export CSV</button>
+      <button id="btnExportExcel">Export Excel</button>
+      <button id="btnEditMargins">Edit Margins</button>
       <label for="filterService">Filter by Service To:</label>
       <select id="filterService"><option value="">Show All</option></select>
     </div>
@@ -65,345 +62,393 @@
   <div id="marginsModal" class="modal">
     <div class="modal-content">
       <h2>Edit Margin Rules (Enter % to add)</h2>
-      <label>Service To:</label><select id="cboService"></select>
-      <label>SKU:</label><select id="cboSKU"></select>
-      <label>Margin % (e.g. 49.1):</label><input type="text" id="txtMargin" placeholder="49.1"/>
+      <label>Service To:</label>
+      <select id="cboService"></select>
+
+      <label>SKU:</label>
+      <select id="cboSKU"></select>
+
+      <label>Margin % (e.g. 49.1):</label>
+      <input type="text" id="txtMargin" placeholder="49.1" />
+
       <button id="btnAdd">Add / Update</button>
       <button id="btnDelete">Delete Selected</button>
       <button id="btnCloseModal">Close</button>
+
       <h3>Current Rules</h3>
       <select id="lstMargins" size="10"></select>
     </div>
   </div>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      /* --------------------------------------------------------------
-         1. AZURE AD / MFA
-         -------------------------------------------------------------- */
-      const msalConfig = {
-        auth: {
-          clientId: "f3833b57-b9c9-4700-ab29-af48f0810d28",  // ← Get from Azure Portal
-        authority: "https://login.microsoftonline.com/07acaf92-4964-41e2-83b0-c107d4a66577",  // ← Your Tenant
-        redirectUri: "https://brave-plant-08d104a0f.3.azurestaticapps.net", // ← Your Page
-        },
-        cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: true }
-      };
-      const msalInstance = new msal.PublicClientApplication(msalConfig);
-      let account = null;
+    // === 57 MARGIN RULES ===
+    let marginRules = [
+      ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
+      ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
+      ["GUILD MORTGAGE","A-FLEX-WCC-S-N-O",116.98],
+      ["GUILD MORTGAGE","A-FLEX-WCC-P-N-O",116.98],
+      ["GUILD MORTGAGE","SVS-CSS-SUPT-SSPT",20],
+      ["GUILD MORTGAGE","A-FLEX-EACL",51.92],
+      ["GUILD MORTGAGE","A-FLEX-WCC-P-N",49.1],
+      ["GUILD MORTGAGE","A-FLEX-WCC-S-N",49.1],
+      ["GUILD MORTGAGE","A-AUD-PSTN-IBTF",0],
+      ["GUILD MORTGAGE","A-AUD-U-IBTF",0],
+      ["GUILD MORTGAGE","A-AUD-OCP1-U",0],
+      ["GUILD MORTGAGE","A-AUD-U-TN",0],
+      ["GUILD MORTGAGE","A-CHAN-U-V-FRUS-OB",0],
+      ["GUILD MORTGAGE","A-CHAN-V-PORTS",0],
+      ["GUILD MORTGAGE","A-FLEX-WCE-E",0],
+      ["PGT INNOVATIONS","A-FLEX-WCC-S-N-O",171.4],
+      ["PGT INNOVATIONS","A-FLEX-WCC-P-N-O",171.4],
+      ["PGT INNOVATIONS","SVS-CSS-SUPT-SSPT",120],
+      ["PGT INNOVATIONS","A-FLEX-EACL",50.99],
+      ["PGT INNOVATIONS","A-FLEX-WCC-P-N",0],
+      ["PGT INNOVATIONS","A-FLEX-WCC-S-N",0],
+      ["PGT INNOVATIONS","A-AUD-PSTN-IBTF",0],
+      ["PGT INNOVATIONS","A-AUD-U-IBTF",0],
+      ["PGT INNOVATIONS","A-AUD-OCP1-U",0],
+      ["PGT INNOVATIONS","A-AUD-U-TN",0],
+      ["PGT INNOVATIONS","A-CHAN-U-V-FRUS-OB",0],
+      ["PGT INNOVATIONS","A-CHAN-V-PORTS",0],
+      ["PGT INNOVATIONS","A-FLEX-WCE-E",116.22],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N-O",43.75],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N-O",43.75],
+      ["LYNN COMMUNITY HEALTH CENTER","SVS-CSS-SUPT-SSPT",20],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-EACL",92.31],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N",46.55],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N",71.37],
+      ["LYNN COMMUNITY HEALTH CENTER","A-AUD-PSTN-IBTF",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-IBTF",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-AUD-OCP1-U",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-TN",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-U-V-FRUS-OB",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-V-PORTS",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCE-E",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-C",21.7],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-C",21.7],
+      ["ROEHL TRANSPORTHARVEY MILLER","SVS-CSS-SUPT-SSPT",120],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-EACL",21.7],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-N",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-N",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-PSTN-IBTF",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-U-IBTF",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-OCP1-U",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-U-TN",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-U-V-FRUS-OB",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-V-PORTS",0],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCE-E",0],
+      ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-E",69.58],
+      ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",92.31]
+    ];
 
-      // Remember that we want the modal after login
-      if (sessionStorage.getItem('openMargins') === 'true') {
-        sessionStorage.removeItem('openMargins');
-        openMarginsModal();
+    // === MODAL ===
+    const modal = document.getElementById('marginsModal');
+    const cboService = document.getElementById('cboService');
+    const cboSKU = document.getElementById('cboSKU');
+    const txtMargin = document.getElementById('txtMargin');
+    const lstMargins = document.getElementById('lstMargins');
+
+    function loadDropdowns() {
+      const services = new Set(marginRules.map(r => r[0]).filter(Boolean));
+      const skus = new Set(marginRules.map(r => r[1]).filter(Boolean));
+      services.add('*'); skus.add('*');
+
+      cboService.innerHTML = '';
+      [...services].sort().forEach(s => cboService.add(new Option(s, s)));
+
+      cboSKU.innerHTML = '';
+      [...skus].sort().forEach(s => cboSKU.add(new Option(s, s)));
+    }
+
+    function loadMarginsList() {
+      lstMargins.innerHTML = '';
+      marginRules.forEach((r, i) => {
+        const opt = new Option(`${r[0]} | ${r[1]} | ${r[2].toFixed(4)}%`, i);
+        lstMargins.add(opt);
+      });
+    }
+
+    function clearForm() {
+      cboService.value = ''; cboSKU.value = ''; txtMargin.value = ''; lstMargins.selectedIndex = -1;
+    }
+
+    document.getElementById('btnEditMargins').onclick = () => {
+      loadDropdowns();
+      loadMarginsList();
+      clearForm();
+      modal.style.display = 'flex';
+    };
+
+    document.getElementById('btnCloseModal').onclick = () => modal.style.display = 'none';
+
+    document.getElementById('btnAdd').onclick = () => {
+      const service = cboService.value.trim();
+      const sku = cboSKU.value.trim();
+      const marginText = txtMargin.value.trim();
+
+      if (!service || !sku) return alert("Service To and SKU required");
+      if (!/^\d*\.?\d*$/.test(marginText)) return alert("Margin must be a number (e.g. 49.1)");
+
+      const margin = parseFloat(marginText);
+      const existing = marginRules.findIndex(r => r[0] === service && r[1] === sku);
+      if (existing >= 0) {
+        marginRules[existing][2] = margin;
+        alert("Updated");
+      } else {
+        marginRules.push([service, sku, margin]);
+        alert("Added");
       }
+      loadDropdowns();
+      loadMarginsList();
+      clearForm();
+    };
 
-      // Process redirect result
-      msalInstance.handleRedirectPromise()
-        .then(resp => {
-          if (resp) {
-            account = resp.account;
-            document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
-          }
-        })
-        .catch(err => console.error('Redirect error:', err));
+    document.getElementById('btnDelete').onclick = () => {
+      const idx = lstMargins.selectedIndex;
+      if (idx === -1) return alert("Select a rule");
+      marginRules.splice(idx, 1);
+      loadMarginsList();
+      loadDropdowns();
+      clearForm();
+    };
 
-      function loginAndOpenMargins() {
-        sessionStorage.setItem('openMargins', 'true');
-        msalInstance.loginRedirect({ scopes: ["User.Read"] });
-      }
+    lstMargins.onclick = () => {
+      const idx = lstMargins.selectedIndex;
+      if (idx === -1) return;
+      const r = marginRules[idx];
+      cboService.value = r[0];
+      cboSKU.value = r[1];
+      txtMargin.value = r[2].toFixed(4);
+    };
 
-      document.getElementById('btnEditMargins').onclick = () => {
-        if (account) openMarginsModal();
-        else loginAndOpenMargins();
-      };
-
-      /* --------------------------------------------------------------
-         2. MARGIN RULES
-         -------------------------------------------------------------- */
-      let marginRules = [
-        ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
-        ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
-        ["GUILD MORTGAGE","A-FLEX-WCC-S-N-O",116.98],
-        ["GUILD MORTGAGE","A-FLEX-WCC-P-N-O",116.98],
-        ["GUILD MORTGAGE","SVS-CSS-SUPT-SSPT",20],
-        ["GUILD MORTGAGE","A-FLEX-EACL",51.92],
-        ["GUILD MORTGAGE","A-FLEX-WCC-P-N",49.1],
-        ["GUILD MORTGAGE","A-FLEX-WCC-S-N",49.1],
-        ["GUILD MORTGAGE","A-AUD-PSTN-IBTF",0],
-        ["GUILD MORTGAGE","A-AUD-U-IBTF",0],
-        ["GUILD MORTGAGE","A-AUD-OCP1-U",0],
-        ["GUILD MORTGAGE","A-AUD-U-TN",0],
-        ["GUILD MORTGAGE","A-CHAN-U-V-FRUS-OB",0],
-        ["GUILD MORTGAGE","A-CHAN-V-PORTS",0],
-        ["GUILD MORTGAGE","A-FLEX-WCE-E",0],
-        ["PGT INNOVATIONS","A-FLEX-WCC-S-N-O",171.4],
-        ["PGT INNOVATIONS","A-FLEX-WCC-P-N-O",171.4],
-        ["PGT INNOVATIONS","SVS-CSS-SUPT-SSPT",120],
-        ["PGT INNOVATIONS","A-FLEX-EACL",50.99],
-        ["PGT INNOVATIONS","A-FLEX-WCC-P-N",0],
-        ["PGT INNOVATIONS","A-FLEX-WCC-S-N",0],
-        ["PGT INNOVATIONS","A-AUD-PSTN-IBTF",0],
-        ["PGT INNOVATIONS","A-AUD-U-IBTF",0],
-        ["PGT INNOVATIONS","A-AUD-OCP1-U",0],
-        ["PGT INNOVATIONS","A-AUD-U-TN",0],
-        ["PGT INNOVATIONS","A-CHAN-U-V-FRUS-OB",0],
-        ["PGT INNOVATIONS","A-CHAN-V-PORTS",0],
-        ["PGT INNOVATIONS","A-FLEX-WCE-E",116.22],
-        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N-O",43.75],
-        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N-O",43.75],
-        ["LYNN COMMUNITY HEALTH CENTER","SVS-CSS-SUPT-SSPT",20],
-        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-EACL",92.31],
-        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N",46.55],
-        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N",71.37],
-        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-PSTN-IBTF",0],
-        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-IBTF",0],
-        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-OCP1-U",0],
-        ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-TN",0],
-        ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-U-V-FRUS-OB",0],
-        ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-V-PORTS",0],
-        ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCE-E",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-C",21.7],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-C",21.7],
-        ["ROEHL TRANSPORTHARVEY MILLER","SVS-CSS-SUPT-SSPT",120],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-EACL",21.7],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-N",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-N",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-PSTN-IBTF",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-U-IBTF",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-OCP1-U",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-U-TN",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-U-V-FRUS-OB",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-V-PORTS",0],
-        ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCE-E",0],
-        ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-E",69.58],
-        ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",92.31]
-      ];
-
-      /* --------------------------------------------------------------
-         3. MODAL
-         -------------------------------------------------------------- */
-      const modal = document.getElementById('marginsModal');
-      const cboService = document.getElementById('cboService');
-      const cboSKU = document.getElementById('cboSKU');
-      const txtMargin = document.getElementById('txtMargin');
-      const lstMargins = document.getElementById('lstMargins');
-
-      function loadDropdowns() {
-        const services = new Set(marginRules.map(r=>r[0]).filter(Boolean));
-        const skus = new Set(marginRules.map(r=>r[1]).filter(Boolean));
-        services.add('*'); skus.add('*');
-
-        cboService.innerHTML = '';
-        [...services].sort().forEach(s=>cboService.add(new Option(s,s)));
-
-        cboSKU.innerHTML = '';
-        [...skus].sort().forEach(s=>cboSKU.add(new Option(s,s)));
-      }
-
-      function loadMarginsList() {
-        lstMargins.innerHTML = '';
-        marginRules.forEach((r,i)=>lstMargins.add(new Option(`${r[0]} | ${r[1]} | ${r[2].toFixed(4)}%`,i)));
-      }
-
-      function clearForm() {
-        cboService.value=''; cboSKU.value=''; txtMargin.value=''; lstMargins.selectedIndex=-1;
-      }
-
-      function openMarginsModal() {
-        loadDropdowns(); loadMarginsList(); clearForm();
-        modal.style.display='flex';
-      }
-
-      document.getElementById('btnCloseModal').onclick = ()=>modal.style.display='none';
-
-      document.getElementById('btnAdd').onclick = ()=>{
-        const service=cboService.value.trim();
-        const sku=cboSKU.value.trim();
-        const txt=txtMargin.value.trim();
-        if(!service||!sku) return alert('Service To and SKU required');
-        if(!/^\d*\.?\d*$/.test(txt)) return alert('Margin must be a number');
-        const margin=parseFloat(txt);
-        const idx=marginRules.findIndex(r=>r[0]===service && r[1]===sku);
-        if(idx>=0){marginRules[idx][2]=margin; alert('Updated');}
-        else{marginRules.push([service,sku,margin]); alert('Added');}
-        loadDropdowns(); loadMarginsList(); clearForm();
-      };
-
-      document.getElementById('btnDelete').onclick = ()=>{
-        const idx=lstMargins.selectedIndex;
-        if(idx===-1) return alert('Select a rule');
-        marginRules.splice(idx,1);
-        loadMarginsList(); loadDropdowns(); clearForm();
-      };
-
-      lstMargins.onclick = ()=>{
-        const idx=lstMargins.selectedIndex;
-        if(idx===-1) return;
-        const r=marginRules[idx];
-        cboService.value=r[0]; cboSKU.value=r[1]; txtMargin.value=r[2].toFixed(4);
-      };
-
-      cboService.onkeydown=cboSKU.onkeydown=e=>{
-        if(e.key==='Enter'){
-          const val=e.target.value.trim();
-          if(val && ![...e.target.options].some(o=>o.value===val)){
-            e.target.add(new Option(val,val));
-            e.target.value=val;
-          }
+    cboService.onkeydown = cboSKU.onkeydown = e => {
+      if (e.key === 'Enter') {
+        const val = e.target.value.trim();
+        if (val && ![...e.target.options].some(o => o.value === val)) {
+          e.target.add(new Option(val, val));
+          e.target.value = val;
         }
-      };
+      }
+    };
 
-      /* --------------------------------------------------------------
-         4. INVOICE PROCESSING
-         -------------------------------------------------------------- */
-      let allGroups={}, headers=[], extIdx=-1, serviceIdx=-1, skuIdx=-1;
-      const statusDiv=document.getElementById('status');
+    // === GLOBAL DATA ===
+    let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1;
+    const statusDiv = document.getElementById('status');
 
-      document.getElementById('btnImport').onclick = ()=>{
-        const file=document.getElementById('fileInput').files[0];
-        if(!file) return alert('Select invoice file');
+    // === IMPORT ===
+    document.getElementById('btnImport').onclick = () => {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return alert("Select file");
 
-        statusDiv.textContent='Processing...';
-        const reader=new FileReader();
-        reader.onload=e=>{
-          try{
-            const data=new Uint8Array(e.target.result);
-            const wb=XLSX.read(data,{type:'array'});
+      statusDiv.textContent = "Processing...";
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
 
-            const sheetName=Object.keys(wb.Sheets).find(n=>n.toLowerCase().includes('consolidated'));
-            if(!sheetName) throw new Error('No ConsolidatedInvoice sheet');
+          const sheetName = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('consolidated'));
+          if (!sheetName) throw new Error('No ConsolidatedInvoice sheet');
 
-            const sheet=wb.Sheets[sheetName];
-            const json=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+          const sheet = wb.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-            let headerRow=-1;
-            for(let i=0;i<Math.min(json.length,100);i++){
-              if(json[i].some(c=>String(c).toLowerCase().includes('sku'))){headerRow=i;break;}
+          let headerRow = -1;
+          for (let i = 0; i < Math.min(json.length, 100); i++) {
+            if (json[i].some(c => String(c).toLowerCase().includes('sku'))) {
+              headerRow = i; break;
             }
-            if(headerRow===-1) throw new Error('Header row not found');
-
-            headers=json[headerRow];
-            const rows=json.slice(headerRow+1);
-
-            const findCol=names=>{
-              for(let i=0;i<headers.length;i++){
-                if(names.some(n=>String(headers[i]).toLowerCase().includes(n.toLowerCase()))) return i;
-              }
-              return -1;
-            };
-
-            extIdx=findCol(['Extended Amount']);
-            serviceIdx=findCol(['Service To']);
-            skuIdx=findCol(['SKU']);
-            if(extIdx===-1||serviceIdx===-1||skuIdx===-1) throw new Error('Missing required columns');
-
-            const validRows=rows.filter(r=>{
-              const ext=r[extIdx];
-              return ext && parseFloat(ext)>0 && !String(ext).includes('-');
-            });
-
-            if(validRows.length===0) throw new Error('No valid rows');
-
-            allGroups={};
-            validRows.forEach(r=>{
-              const service=r[serviceIdx]||'Unknown';
-              if(!allGroups[service]) allGroups[service]=[];
-              allGroups[service].push(r);
-            });
-
-            const filter=document.getElementById('filterService');
-            filter.innerHTML='<option value="">Show All</option>';
-            Object.keys(allGroups).sort().forEach(s=>filter.add(new Option(s,s)));
-
-            statusDiv.textContent=`Imported ${validRows.length} rows.`;
-            renderTable();
-          }catch(err){
-            statusDiv.textContent='Error: '+err.message;
-            console.error(err);
           }
-        };
-        reader.readAsArrayBuffer(file);
-      };
+          if (headerRow === -1) throw new Error('Header row not found');
 
-      document.getElementById('filterService').onchange=()=>{if(extIdx!==-1) renderTable();};
+          headers = json[headerRow];
+          const rows = json.slice(headerRow + 1);
 
-      function renderTable(){
-        const sel=document.getElementById('filterService').value;
-        const groups=sel?{[sel]:allGroups[sel]}:allGroups;
+          const findCol = names => {
+            for (let i = 0; i < headers.length; i++) {
+              if (names.some(n => String(headers[i]).toLowerCase().includes(n.toLowerCase()))) return i;
+            }
+            return -1;
+          };
 
-        let html=`<table><thead><tr>`;
-        headers.forEach(h=>html+=`<th>${h}</th>`);
-        html+=`<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
+          extIdx = findCol(['Extended Amount']);
+          serviceIdx = findCol(['Service To']);
+          skuIdx = findCol(['SKU']);
+          if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) throw new Error('Missing required columns');
 
-        let filteredGT=0;
-        Object.keys(groups).sort().forEach(service=>{
-          let black=0, green=0;
-          groups[service].forEach(r=>{
-            const ext=parseFloat(r[extIdx])||0;
-            const sku=r[skuIdx]||'';
-            const marginPct=getMarginFor(service,sku);
-            const margin=marginPct/100;
-            const markup=ext*(1+margin);
-
-            r.push(marginPct.toFixed(4));
-            r.push(markup.toFixed(2));
-
-            if(margin>0) green+=markup; else black+=markup;
-            filteredGT+=markup;
-
-            html+=`<tr>`;
-            r.forEach((c,i)=>{
-              if(i===serviceIdx) html+=`<td class="service-to">${c}</td>`;
-              else if(i===r.length-1) html+=`<td class="markup-${margin>0?'green':'black'}">${c}</td>`;
-              else if(i===r.length-2) html+=`<td class="margin-cell">${c}%</td>`;
-              else html+=`<td>${c}</td>`;
-            });
-            html+=`</tr>`;
+          const validRows = rows.filter(r => {
+            const ext = r[extIdx];
+            return ext && parseFloat(ext) > 0 && !String(ext).includes('-');
           });
 
-          html+=`<tr class="subtotal-black"><td colspan="${headers.length}">Subtotal (0% Margin)</td><td></td><td>${black.toFixed(2)}</td></tr>`;
-          html+=`<tr class="subtotal-green"><td colspan="${headers.length}">Subtotal (Markup Applied)</td><td></td><td>${green.toFixed(2)}</td></tr>`;
-          html+=`<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black+green).toFixed(2)}</td></tr>`;
-        });
+          if (validRows.length === 0) throw new Error('No valid rows');
 
-        html+=`<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
-        html+=`</tbody></table>`;
-        document.getElementById('output').innerHTML=html;
-      }
+          allGroups = {};
+          validRows.forEach(r => {
+            const service = r[serviceIdx] || 'Unknown';
+            if (!allGroups[service]) allGroups[service] = [];
+            allGroups[service].push(r);
+          });
 
-      function getMarginFor(service,sku){
-        for(const r of marginRules){
-          const sMatch=r[0]==='*'||r[0]===service;
-          const kMatch=r[1]==='*'||r[1]===sku;
-          if(sMatch && kMatch) return r[2];
+          const filter = document.getElementById('filterService');
+          filter.innerHTML = '<option value="">Show All</option>';
+          Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
+
+          statusDiv.textContent = `Imported ${validRows.length} rows.`;
+          renderTable();
+        } catch (err) {
+          statusDiv.textContent = 'Error: ' + err.message;
+          console.error(err);
         }
-        return 0;
-      }
-
-      document.getElementById('btnClear').onclick=()=>{
-        document.getElementById('output').innerHTML='';
-        document.getElementById('fileInput').value='';
-        document.getElementById('filterService').innerHTML='<option value="">Show All</option>';
-        allGroups={}; headers=[]; extIdx=serviceIdx=skuIdx=-1;
-        statusDiv.textContent='';
       };
+      reader.readAsArrayBuffer(file);
+    };
 
-      document.getElementById('btnExport').onclick=()=>{
-        const tbl=document.querySelector('#output table');
-        if(!tbl) return alert('No data');
-        let csv=[];
-        tbl.querySelectorAll('tr').forEach(row=>{
-          const cols=Array.from(row.cells).map(c=>`"${c.innerText.replace(/"/g,'""')}"`);
-          csv.push(cols.join(','));
+    // === RENDER TABLE ===
+    document.getElementById('filterService').onchange = () => {
+      if (extIdx !== -1) renderTable();
+    };
+
+    function renderTable() {
+      const sel = document.getElementById('filterService').value;
+      const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
+
+      let html = `<table><thead><tr>`;
+      headers.forEach(h => html += `<th>${h}</th>`);
+      html += `<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
+
+      let filteredGT = 0;
+      Object.keys(groups).sort().forEach(service => {
+        let black = 0, green = 0;
+        groups[service].forEach(r => {
+          const ext = parseFloat(r[extIdx]) || 0;
+          const sku = r[skuIdx] || '';
+          const marginPct = getMarginFor(service, sku);
+          const margin = marginPct / 100;
+          const markup = ext * (1 + margin);
+
+          const rowCopy = [...r];
+          rowCopy.push(marginPct.toFixed(4));
+          rowCopy.push(markup.toFixed(2));
+
+          if (margin > 0) green += markup;
+          else black += markup;
+          filteredGT += markup;
+
+          html += `<tr>`;
+          rowCopy.forEach((c, i) => {
+            if (i === serviceIdx) html += `<td class="service-to">${c}</td>`;
+            else if (i === rowCopy.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${c}</td>`;
+            else if (i === rowCopy.length - 2) html += `<td class="margin-cell">${c}%</td>`;
+            else html += `<td>${c}</td>`;
+          });
+          html += `</tr>`;
         });
-        const blob=new Blob([csv.join('\n')],{type:'text/csv'});
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(blob);
-        a.download='invoice-markup.csv';
-        a.click();
-      };
-    });
+
+        html += `<tr class="subtotal-black"><td colspan="${headers.length}">Subtotal (0% Margin)</td><td></td><td>${black.toFixed(2)}</td></tr>`;
+        html += `<tr class="subtotal-green"><td colspan="${headers.length}">Subtotal (Markup Applied)</td><td></td><td>${green.toFixed(2)}</td></tr>`;
+        html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black + green).toFixed(2)}</td></tr>`;
+      });
+
+      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
+      html += `</tbody></table>`;
+      document.getElementById('output').innerHTML = html;
+    }
+
+    function getMarginFor(service, sku) {
+      for (const r of marginRules) {
+        const sMatch = r[0] === '*' || r[0] === service;
+        const kMatch = r[1] === '*' || r[1] === sku;
+        if (sMatch && kMatch) return r[2];
+      }
+      return 0;
+    }
+
+    // === CLEAR ===
+    document.getElementById('btnClear').onclick = () => {
+      document.getElementById('output').innerHTML = '';
+      document.getElementById('fileInput').value = '';
+      document.getElementById('filterService').innerHTML = '<option value="">Show All</option>';
+      allGroups = {}; headers = []; extIdx = serviceIdx = skuIdx = -1;
+      statusDiv.textContent = '';
+    };
+
+    // === EXPORT CSV ===
+    document.getElementById('btnExportCSV').onclick = () => {
+      const tbl = document.querySelector('#output table');
+      if (!tbl) return alert('No data');
+      let csv = [];
+      tbl.querySelectorAll('tr').forEach(row => {
+        const cols = Array.from(row.cells).map(c => `"${c.innerText.replace(/"/g, '""')}"`);
+        csv.push(cols.join(','));
+      });
+      const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'invoice-markup.csv';
+      a.click();
+    };
+
+    // === EXPORT EXCEL ===
+    document.getElementById('btnExportExcel').onclick = () => {
+      if (extIdx === -1) return alert('Import data first');
+
+      const wb = XLSX.utils.book_new();
+      const wsData = [];
+
+      // Header
+      const header = [...headers, 'Margin %', 'Markup Total'];
+      wsData.push(header);
+
+      // Rows
+      const sel = document.getElementById('filterService').value;
+      const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
+
+      Object.keys(groups).sort().forEach(service => {
+        groups[service].forEach(r => {
+          const ext = parseFloat(r[extIdx]) || 0;
+          const sku = r[skuIdx] || '';
+          const marginPct = getMarginFor(service, sku);
+          const markup = ext * (1 + marginPct / 100);
+
+          const row = [...r];
+          row.push(marginPct.toFixed(4));
+          row.push(markup.toFixed(2));
+          wsData.push(row);
+        });
+
+        // Subtotals
+        const black = groups[service].reduce((sum, r) => {
+          const ext = parseFloat(r[extIdx]) || 0;
+          const sku = r[skuIdx] || '';
+          const marginPct = getMarginFor(service, sku);
+          return sum + (marginPct > 0 ? 0 : ext * (1 + marginPct / 100));
+        }, 0);
+        const green = groups[service].reduce((sum, r) => {
+          const ext = parseFloat(r[extIdx]) || 0;
+          const sku = r[skuIdx] || '';
+          const marginPct = getMarginFor(service, sku);
+          return sum + (marginPct > 0 ? ext * (1 + marginPct / 100) : 0);
+        }, 0);
+
+        wsData.push(['Subtotal (0% Margin)', '', black.toFixed(2)]);
+        wsData.push(['Subtotal (Markup Applied)', '', green.toFixed(2)]);
+        wsData.push([`Total for ${service} (Tax not Included)`, '', (black + green).toFixed(2)]);
+      });
+
+      // Grand Total
+      const grandTotal = Object.values(groups).flat().reduce((sum, r) => {
+        const ext = parseFloat(r[extIdx]) || 0;
+        const sku = r[skuIdx] || '';
+        const marginPct = getMarginFor(r[serviceIdx], sku);
+        return sum + ext * (1 + marginPct / 100);
+      }, 0);
+      wsData.push(['GRAND TOTAL: (Tax not Included)', '', grandTotal.toFixed(2)]);
+
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      XLSX.utils.book_append_sheet(wb, ws, "Markup");
+      XLSX.writeFile(wb, "invoice-markup.xlsx");
+    };
   </script>
 </body>
 </html>
