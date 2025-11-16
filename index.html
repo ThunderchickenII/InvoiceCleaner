@@ -3,18 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Invoice Markup Tool - MFA Protected</title>
-
-  <!-- XLSX for import/export -->
+  <title>Invoice Markup Tool - MFA</title>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-  <!-- MSAL for MFA -->
   <script src="https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"></script>
-
   <style>
     body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f9f9fb; }
     .container { max-width: 1400px; margin: auto; }
-    .controls { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,.1); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .controls { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
     #btnImport { background: #27ae60; color: white; }
     #btnClear { background: #c0392b; color: white; }
@@ -86,45 +81,43 @@
   </div>
 
   <script>
-    /* --------------------------------------------------------------
-       1. AZURE AD CONFIG – UPDATE THESE 2 LINES
-       -------------------------------------------------------------- */
+    // === AZURE AD CONFIG ===
     const msalConfig = {
       auth: {
         clientId: "f3833b57-b9c9-4700-ab29-af48f0810d28",  // ← Get from Azure Portal
         authority: "https://login.microsoftonline.com/07acaf92-4964-41e2-83b0-c107d4a66577",  // ← Your Tenant
         redirectUri: "https://brave-plant-08d104a0f.3.azurestaticapps.net", // ← Your Page
       },
-      cache: {
-        cacheLocation: "localStorage",
-        storeAuthStateInCookie: true
-      }
+      cache: { cacheLocation: "localStorage", storeAuthStateInCookie: true }
     };
     const msalInstance = new msal.PublicClientApplication(msalConfig);
     let account = null;
+    let pendingEditMargins = false;
 
-    // Handle redirect result on page load
+    // === HANDLE REDIRECT ON PAGE LOAD ===
     msalInstance.handleRedirectPromise()
       .then(response => {
         if (response) {
           account = response.account;
           document.getElementById('userInfo').textContent = `(Logged in: ${account.name})`;
-          openMarginsModal();
+          if (pendingEditMargins) {
+            openMarginsModal();
+            pendingEditMargins = false;
+          }
         }
       })
       .catch(error => {
         console.error("Redirect error:", error);
       });
 
-    // === LOGIN WITH REDIRECT (NO POPUP) ===
+    // === LOGIN + OPEN MODAL ===
     async function loginAndOpenMargins() {
       try {
-        const loginRequest = {
-          scopes: ["User.Read"]
-        };
+        const loginRequest = { scopes: ["User.Read"] };
+        pendingEditMargins = true;
         await msalInstance.loginRedirect(loginRequest);
       } catch (error) {
-        alert("MFA failed or was cancelled. Access denied.");
+        alert("MFA failed or canceled.");
         console.error(error);
       }
     }
@@ -137,9 +130,7 @@
       }
     };
 
-    /* --------------------------------------------------------------
-       2. MARGIN RULES (57 – % add-on)
-       -------------------------------------------------------------- */
+    // === MARGIN RULES ===
     let marginRules = [
       ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
       ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
@@ -175,7 +166,7 @@
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-EACL",92.31],
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N",46.55],
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N",71.37],
-      ["LYNN COMMUNITY HEALTH CENTER","A-AUD-PSTN-ICF",0],
+      ["LYNN COMMUNITY HEALTH CENTER","A-AUD-PSTN-IBTF",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-IBTF",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-AUD-OCP1-U",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-TN",0],
@@ -199,9 +190,7 @@
       ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",92.31]
     ];
 
-    /* --------------------------------------------------------------
-       3. MODAL (Edit Margins)
-       -------------------------------------------------------------- */
+    // === MODAL ===
     const modal = document.getElementById('marginsModal');
     const cboService = document.getElementById('cboService');
     const cboSKU = document.getElementById('cboSKU');
@@ -291,15 +280,14 @@
       }
     };
 
-    /* --------------------------------------------------------------
-       4. GLOBAL DATA + IMPORT
-       -------------------------------------------------------------- */
+    // === GLOBAL DATA ===
     let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1, grandTotal = 0;
     const statusDiv = document.getElementById('status');
 
+    // === IMPORT ===
     document.getElementById('btnImport').onclick = () => {
       const file = document.getElementById('fileInput').files[0];
-      if (!file) return alert("Select invoice file");
+      if (!file) return alert("Select file");
 
       statusDiv.textContent = "Processing...";
       const reader = new FileReader();
@@ -366,9 +354,7 @@
       reader.readAsArrayBuffer(file);
     };
 
-    /* --------------------------------------------------------------
-       5. FILTER + RENDER
-       -------------------------------------------------------------- */
+    // === RENDER TABLE ===
     document.getElementById('filterService').onchange = renderTable;
 
     function renderTable() {
@@ -425,9 +411,7 @@
       return 0;
     }
 
-    /* --------------------------------------------------------------
-       6. CLEAR & EXPORT
-       -------------------------------------------------------------- */
+    // === CLEAR & EXPORT ===
     document.getElementById('btnClear').onclick = () => {
       document.getElementById('output').innerHTML = '';
       document.getElementById('fileInput').value = '';
