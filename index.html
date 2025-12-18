@@ -5,16 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Invoice Markup Tool</title>
   <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
   <style>
     body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f9f9fb; }
     .container { max-width: 1400px; margin: auto; }
     .controls { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     button { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
     #btnImport { background: #27ae60; color: white; }
+    #btnImportTax { background: #2980b9; color: white; }
     #btnClear { background: #c0392b; color: white; }
     #btnExportCSV { background: #2980b9; color: white; }
     #btnExportExcel { background: #f39c12; color: white; }
     #btnEditMargins { background: #8e44ad; color: white; }
+    #btnPrintPDF { background: #16a085; color: white; }
     input[type="file"], select { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
     label { font-weight: bold; }
     table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; font-size: 0.9em; }
@@ -28,6 +32,7 @@
     .margin-cell { text-align: center; }
     .markup-green { color: #27ae60; font-weight: bold; }
     .markup-black { color: black; font-weight: bold; }
+    .tax-total td { background: #e2e3e5; color: #41464b; font-weight: bold; }
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
     .modal-content { background: white; padding: 20px; border-radius: 8px; width: 500px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
     .modal label { display: block; margin: 10px 0 5px; font-weight: bold; }
@@ -40,20 +45,20 @@
 <body>
   <div class="container">
     <h1>Invoice Markup Tool</h1>
-
     <div class="controls">
       <input type="file" id="fileInput" accept=".xlsx" />
       <button id="btnImport">Import Invoice</button>
+      <input type="file" id="taxInput" accept=".xlsx" />
+      <button id="btnImportTax">Import Tax</button>
       <button id="btnClear">Clear Data</button>
       <button id="btnExportCSV">Export CSV</button>
       <button id="btnExportExcel">Export Excel</button>
       <button id="btnEditMargins">Edit Margins</button>
+      <button id="btnPrintPDF">Print to PDF</button>
       <label for="filterService">Filter by Service To:</label>
       <select id="filterService"><option value="">Show All</option></select>
     </div>
-
     <div id="status"></div>
-
     <h2>Processed Invoice</h2>
     <div id="output"></div>
   </div>
@@ -63,10 +68,12 @@
     <div class="modal-content">
       <h2>Edit Margin Rules (Enter % to add)</h2>
       <label>Service To:</label>
-      <select id="cboService"></select>
+      <input type="text" id="txtService" placeholder="Type new or existing Service To" list="serviceSuggestions" />
+      <datalist id="serviceSuggestions"></datalist>
 
       <label>SKU:</label>
-      <select id="cboSKU"></select>
+      <input type="text" id="txtSKU" placeholder="Type new or existing SKU" list="skuSuggestions" />
+      <datalist id="skuSuggestions"></datalist>
 
       <label>Margin % (e.g. 49.1):</label>
       <input type="text" id="txtMargin" placeholder="49.1" />
@@ -75,13 +82,19 @@
       <button id="btnDelete">Delete Selected</button>
       <button id="btnCloseModal">Close</button>
 
+      <hr style="margin: 15px 0;" />
+
+      <button id="btnExportRules">Export Rules (JSON)</button>
+      <input type="file" id="importRulesInput" accept=".json" style="display: block; margin: 10px 0;" />
+      <button id="btnImportRules">Import Rules</button>
+
       <h3>Current Rules</h3>
       <select id="lstMargins" size="10"></select>
     </div>
   </div>
 
   <script>
-    // === 57 MARGIN RULES ===
+    // === MARGIN RULES ===
     let marginRules = [
       ["ECO WINDOW SYSTEMS LLC","A-AUD-OCP1-U",0],
       ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-P",109.65],
@@ -143,21 +156,20 @@
 
     // === MODAL ===
     const modal = document.getElementById('marginsModal');
-    const cboService = document.getElementById('cboService');
-    const cboSKU = document.getElementById('cboSKU');
+    const txtService = document.getElementById('txtService');
+    const txtSKU = document.getElementById('txtSKU');
     const txtMargin = document.getElementById('txtMargin');
     const lstMargins = document.getElementById('lstMargins');
+    const serviceSuggestions = document.getElementById('serviceSuggestions');
+    const skuSuggestions = document.getElementById('skuSuggestions');
+    const importRulesInput = document.getElementById('importRulesInput');
 
-    function loadDropdowns() {
-      const services = new Set(marginRules.map(r => r[0]).filter(Boolean));
-      const skus = new Set(marginRules.map(r => r[1]).filter(Boolean));
-      services.add('*'); skus.add('*');
+    function updateSuggestions() {
+      const services = [...new Set(marginRules.map(r => r[0]))].sort();
+      const skus = [...new Set(marginRules.map(r => r[1]))].sort();
 
-      cboService.innerHTML = '';
-      [...services].sort().forEach(s => cboService.add(new Option(s, s)));
-
-      cboSKU.innerHTML = '';
-      [...skus].sort().forEach(s => cboSKU.add(new Option(s, s)));
+      serviceSuggestions.innerHTML = services.map(s => `<option value="${s}">`).join('');
+      skuSuggestions.innerHTML = skus.map(s => `<option value="${s}">`).join('');
     }
 
     function loadMarginsList() {
@@ -169,11 +181,14 @@
     }
 
     function clearForm() {
-      cboService.value = ''; cboSKU.value = ''; txtMargin.value = ''; lstMargins.selectedIndex = -1;
+      txtService.value = '';
+      txtSKU.value = '';
+      txtMargin.value = '';
+      lstMargins.selectedIndex = -1;
     }
 
     document.getElementById('btnEditMargins').onclick = () => {
-      loadDropdowns();
+      updateSuggestions();
       loadMarginsList();
       clearForm();
       modal.style.display = 'flex';
@@ -182,33 +197,35 @@
     document.getElementById('btnCloseModal').onclick = () => modal.style.display = 'none';
 
     document.getElementById('btnAdd').onclick = () => {
-      const service = cboService.value.trim();
-      const sku = cboSKU.value.trim();
+      const service = txtService.value.trim();
+      const sku = txtSKU.value.trim();
       const marginText = txtMargin.value.trim();
 
-      if (!service || !sku) return alert("Service To and SKU required");
+      if (!service || !sku) return alert("Service To and SKU are required");
       if (!/^\d*\.?\d*$/.test(marginText)) return alert("Margin must be a number (e.g. 49.1)");
 
       const margin = parseFloat(marginText);
       const existing = marginRules.findIndex(r => r[0] === service && r[1] === sku);
+
       if (existing >= 0) {
         marginRules[existing][2] = margin;
-        alert("Updated");
+        alert("Rule updated");
       } else {
         marginRules.push([service, sku, margin]);
-        alert("Added");
+        alert("New rule added");
       }
-      loadDropdowns();
+
+      updateSuggestions();
       loadMarginsList();
       clearForm();
     };
 
     document.getElementById('btnDelete').onclick = () => {
       const idx = lstMargins.selectedIndex;
-      if (idx === -1) return alert("Select a rule");
+      if (idx === -1) return alert("Select a rule to delete");
       marginRules.splice(idx, 1);
       loadMarginsList();
-      loadDropdowns();
+      updateSuggestions();
       clearForm();
     };
 
@@ -216,43 +233,88 @@
       const idx = lstMargins.selectedIndex;
       if (idx === -1) return;
       const r = marginRules[idx];
-      cboService.value = r[0];
-      cboSKU.value = r[1];
+      txtService.value = r[0];
+      txtSKU.value = r[1];
       txtMargin.value = r[2].toFixed(4);
     };
 
-    cboService.onkeydown = cboSKU.onkeydown = e => {
+    txtService.onkeydown = txtSKU.onkeydown = txtMargin.onkeydown = e => {
       if (e.key === 'Enter') {
-        const val = e.target.value.trim();
-        if (val && ![...e.target.options].some(o => o.value === val)) {
-          e.target.add(new Option(val, val));
-          e.target.value = val;
-        }
+        e.preventDefault();
+        document.getElementById('btnAdd').click();
       }
     };
 
+    // === EXPORT RULES ===
+    document.getElementById('btnExportRules').onclick = () => {
+      const dataStr = JSON.stringify(marginRules, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'margin-rules.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // === IMPORT RULES ===
+    document.getElementById('btnImportRules').onclick = () => {
+      const file = importRulesInput.files[0];
+      if (!file) return alert("Select a JSON file to import");
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (!Array.isArray(imported)) throw new Error('Invalid format');
+          marginRules = imported;
+          updateSuggestions();
+          loadMarginsList();
+          alert(`Imported ${imported.length} margin rules successfully!`);
+        } catch (err) {
+          alert('Error importing rules: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    };
+
     // === GLOBAL DATA ===
-    let allGroups = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1;
+    let allGroups = {}, allTaxes = {}, taxDetails = {}, headers = [], extIdx = -1, serviceIdx = -1, skuIdx = -1;
+    let startDateIdx = -1, endDateIdx = -1;
     const statusDiv = document.getElementById('status');
 
-    // === IMPORT ===
+    // === DATE FORMATTING ===
+    function formatDateToMMDDYY(val) {
+      if (!val) return '';
+      if (typeof val === 'number') {
+        const date = XLSX.SSF.parse_date_code(val);
+        if (!date) return val;
+        return `${String(date.m).padStart(2, '0')}/${String(date.d).padStart(2, '0')}/${String(date.y).slice(-2)}`;
+      } else if (typeof val === 'string') {
+        if (val.length === 8 && /^\d{8}$/.test(val)) {
+          return `${val.slice(4,6)}/${val.slice(6,8)}/${val.slice(2,4)}`;
+        }
+        const date = new Date(val);
+        if (!isNaN(date.getTime())) {
+          return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${String(date.getFullYear()).slice(-2)}`;
+        }
+      }
+      return val;
+    }
+
+    // === IMPORT INVOICE ===
     document.getElementById('btnImport').onclick = () => {
       const file = document.getElementById('fileInput').files[0];
       if (!file) return alert("Select file");
-
       statusDiv.textContent = "Processing...";
       const reader = new FileReader();
       reader.onload = e => {
         try {
           const data = new Uint8Array(e.target.result);
           const wb = XLSX.read(data, { type: 'array' });
-
           const sheetName = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('consolidated'));
           if (!sheetName) throw new Error('No ConsolidatedInvoice sheet');
-
           const sheet = wb.Sheets[sheetName];
           const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-
           let headerRow = -1;
           for (let i = 0; i < Math.min(json.length, 100); i++) {
             if (json[i].some(c => String(c).toLowerCase().includes('sku'))) {
@@ -260,40 +322,34 @@
             }
           }
           if (headerRow === -1) throw new Error('Header row not found');
-
           headers = json[headerRow];
           const rows = json.slice(headerRow + 1);
-
           const findCol = names => {
             for (let i = 0; i < headers.length; i++) {
               if (names.some(n => String(headers[i]).toLowerCase().includes(n.toLowerCase()))) return i;
             }
             return -1;
           };
-
           extIdx = findCol(['Extended Amount']);
           serviceIdx = findCol(['Service To']);
           skuIdx = findCol(['SKU']);
+          startDateIdx = findCol(['Start Date']);
+          endDateIdx = findCol(['End Date']);
           if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) throw new Error('Missing required columns');
-
           const validRows = rows.filter(r => {
             const ext = r[extIdx];
             return ext && parseFloat(ext) > 0 && !String(ext).includes('-');
           });
-
           if (validRows.length === 0) throw new Error('No valid rows');
-
           allGroups = {};
           validRows.forEach(r => {
             const service = r[serviceIdx] || 'Unknown';
             if (!allGroups[service]) allGroups[service] = [];
             allGroups[service].push(r);
           });
-
           const filter = document.getElementById('filterService');
           filter.innerHTML = '<option value="">Show All</option>';
           Object.keys(allGroups).sort().forEach(s => filter.add(new Option(s, s)));
-
           statusDiv.textContent = `Imported ${validRows.length} rows.`;
           renderTable();
         } catch (err) {
@@ -304,53 +360,123 @@
       reader.readAsArrayBuffer(file);
     };
 
-    // === RENDER TABLE ===
-    document.getElementById('filterService').onchange = () => {
-      if (extIdx !== -1) renderTable();
+    // === IMPORT TAX - WITH DETAILED LINES ===
+    document.getElementById('btnImportTax').onclick = () => {
+      const file = document.getElementById('taxInput').files[0];
+      if (!file) return alert("Select tax file");
+      statusDiv.textContent = "Processing tax...";
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const wb = XLSX.read(data, { type: 'array' });
+          const sheetName = wb.SheetNames[0];
+          const sheet = wb.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+          let headerRow = -1;
+          for (let i = 0; i < Math.min(json.length, 100); i++) {
+            if (json[i].some(c => String(c).toLowerCase().includes('sku'))) {
+              headerRow = i; break;
+            }
+          }
+          if (headerRow === -1) throw new Error('Service header row not found');
+          const serviceCol = json[headerRow].findIndex(h => String(h).toLowerCase().includes('service to'));
+          if (serviceCol === -1) throw new Error('Service To column not found');
+          const service = json[headerRow + 1][serviceCol] || 'Unknown';
+
+          let taxStart = -1;
+          for (let i = 0; i < json.length; i++) {
+            if (json[i].some(c => String(c).toLowerCase().includes('tax and other charges'))) {
+              taxStart = i; break;
+            }
+          }
+          if (taxStart === -1) throw new Error('Tax section not found');
+
+          const taxHeader = json[taxStart + 1];
+          const lineNoIdx = taxHeader.findIndex(h => String(h).toLowerCase().includes('line no'));
+          const categoryIdx = taxHeader.findIndex(h => String(h).toLowerCase().includes('category'));
+          const amountIdx = taxHeader.findIndex(h => String(h).toLowerCase().includes('amount'));
+          const typeIdx = taxHeader.findIndex(h => String(h).toLowerCase().includes('type'));
+
+          if (amountIdx === -1 || typeIdx === -1) throw new Error('Tax columns not found');
+
+          let totalTax = 0;
+          const details = [];
+
+          for (let i = taxStart + 2; i < json.length; i++) {
+            const row = json[i];
+            if (row.length === 0 || !row[0]) break;
+            const amount = parseFloat(row[amountIdx]) || 0;
+            totalTax += amount;
+
+            details.push({
+              lineNo: row[lineNoIdx] || '',
+              category: row[categoryIdx] || '',
+              amount: amount.toFixed(2),
+              type: row[typeIdx] || ''
+            });
+          }
+
+          allTaxes[service.trim()] = totalTax;
+          taxDetails[service.trim()] = details;
+
+          statusDiv.textContent = `Imported tax for ${service}: $${totalTax.toFixed(2)} (${details.length} lines)`;
+          renderTable();
+        } catch (err) {
+          statusDiv.textContent = 'Error: ' + err.message;
+          console.error(err);
+        }
+      };
+      reader.readAsArrayBuffer(file);
     };
+
+    // === RENDER TABLE ===
+    document.getElementById('filterService').onchange = () => renderTable();
 
     function renderTable() {
       const sel = document.getElementById('filterService').value;
       const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
-
       let html = `<table><thead><tr>`;
       headers.forEach(h => html += `<th>${h}</th>`);
       html += `<th>Margin %</th><th>Markup Total</th></tr></thead><tbody>`;
-
       let filteredGT = 0;
+      let hasTaxes = false;
       Object.keys(groups).sort().forEach(service => {
-        let black = 0, green = 0;
+        let black = 0, green = 0, groupMarkup = 0;
         groups[service].forEach(r => {
           const ext = parseFloat(r[extIdx]) || 0;
           const sku = r[skuIdx] || '';
           const marginPct = getMarginFor(service, sku);
-          const margin = marginPct / 100;
-          const markup = ext * (1 + margin);
-
+          const markup = ext * (1 + marginPct / 100);
+          groupMarkup += markup;
+          if (marginPct > 0) green += markup;
+          else black += markup;
           const rowCopy = [...r];
+          if (startDateIdx !== -1) rowCopy[startDateIdx] = formatDateToMMDDYY(rowCopy[startDateIdx]);
+          if (endDateIdx !== -1) rowCopy[endDateIdx] = formatDateToMMDDYY(rowCopy[endDateIdx]);
           rowCopy.push(marginPct.toFixed(4));
           rowCopy.push(markup.toFixed(2));
-
-          if (margin > 0) green += markup;
-          else black += markup;
-          filteredGT += markup;
-
           html += `<tr>`;
           rowCopy.forEach((c, i) => {
             if (i === serviceIdx) html += `<td class="service-to">${c}</td>`;
-            else if (i === rowCopy.length - 1) html += `<td class="markup-${margin > 0 ? 'green' : 'black'}">${c}</td>`;
+            else if (i === rowCopy.length - 1) html += `<td class="markup-${marginPct > 0 ? 'green' : 'black'}">${c}</td>`;
             else if (i === rowCopy.length - 2) html += `<td class="margin-cell">${c}%</td>`;
             else html += `<td>${c}</td>`;
           });
           html += `</tr>`;
         });
-
         html += `<tr class="subtotal-black"><td colspan="${headers.length}">Subtotal (0% Margin)</td><td></td><td>${black.toFixed(2)}</td></tr>`;
         html += `<tr class="subtotal-green"><td colspan="${headers.length}">Subtotal (Markup Applied)</td><td></td><td>${green.toFixed(2)}</td></tr>`;
-        html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service}    (Tax not Included)</td><td></td><td>${(black + green).toFixed(2)}</td></tr>`;
+        html += `<tr class="group-total"><td colspan="${headers.length}">Total for ${service} (Tax not Included)</td><td></td><td>${groupMarkup.toFixed(2)}</td></tr>`;
+        const tax = allTaxes[service.trim()] || 0;
+        if (tax > 0) {
+          hasTaxes = true;
+          html += `<tr class="tax-total"><td colspan="${headers.length}">Total Tax</td><td></td><td>${tax.toFixed(2)}</td></tr>`;
+          html += `<tr class="group-total"><td colspan="${headers.length}">Grand Total for ${service} (Including Tax)</td><td></td><td>${(groupMarkup + tax).toFixed(2)}</td></tr>`;
+        }
+        filteredGT += groupMarkup + tax;
       });
-
-      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:    (Tax not Included)</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
+      html += `<tr class="grand-total"><td colspan="${headers.length}">GRAND TOTAL:${hasTaxes ? ' (Including Tax)' : ' (Tax not Included)'}</td><td></td><td>${filteredGT.toFixed(2)}</td></tr>`;
       html += `</tbody></table>`;
       document.getElementById('output').innerHTML = html;
     }
@@ -368,8 +494,9 @@
     document.getElementById('btnClear').onclick = () => {
       document.getElementById('output').innerHTML = '';
       document.getElementById('fileInput').value = '';
+      document.getElementById('taxInput').value = '';
       document.getElementById('filterService').innerHTML = '<option value="">Show All</option>';
-      allGroups = {}; headers = []; extIdx = serviceIdx = skuIdx = -1;
+      allGroups = {}; allTaxes = {}; taxDetails = {}; headers = []; extIdx = serviceIdx = skuIdx = startDateIdx = endDateIdx = -1;
       statusDiv.textContent = '';
     };
 
@@ -392,62 +519,190 @@
     // === EXPORT EXCEL ===
     document.getElementById('btnExportExcel').onclick = () => {
       if (extIdx === -1) return alert('Import data first');
-
       const wb = XLSX.utils.book_new();
       const wsData = [];
-
-      // Header
       const header = [...headers, 'Margin %', 'Markup Total'];
       wsData.push(header);
-
-      // Rows
       const sel = document.getElementById('filterService').value;
       const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
-
+      let grandTotal = 0;
+      let hasTaxes = false;
       Object.keys(groups).sort().forEach(service => {
+        let groupMarkup = 0;
         groups[service].forEach(r => {
           const ext = parseFloat(r[extIdx]) || 0;
           const sku = r[skuIdx] || '';
           const marginPct = getMarginFor(service, sku);
           const markup = ext * (1 + marginPct / 100);
-
+          groupMarkup += markup;
           const row = [...r];
+          if (startDateIdx !== -1) row[startDateIdx] = formatDateToMMDDYY(row[startDateIdx]);
+          if (endDateIdx !== -1) row[endDateIdx] = formatDateToMMDDYY(row[endDateIdx]);
           row.push(marginPct.toFixed(4));
           row.push(markup.toFixed(2));
           wsData.push(row);
         });
-
-        // Subtotals
-        const black = groups[service].reduce((sum, r) => {
-          const ext = parseFloat(r[extIdx]) || 0;
-          const sku = r[skuIdx] || '';
-          const marginPct = getMarginFor(service, sku);
-          return sum + (marginPct > 0 ? 0 : ext * (1 + marginPct / 100));
-        }, 0);
-        const green = groups[service].reduce((sum, r) => {
-          const ext = parseFloat(r[extIdx]) || 0;
-          const sku = r[skuIdx] || '';
-          const marginPct = getMarginFor(service, sku);
-          return sum + (marginPct > 0 ? ext * (1 + marginPct / 100) : 0);
-        }, 0);
-
+        const black = groups[service].reduce((sum, r) => sum + (getMarginFor(service, r[skuIdx] || '') > 0 ? 0 : parseFloat(r[extIdx]) * (1 + getMarginFor(service, r[skuIdx] || '') / 100)), 0);
+        const green = groups[service].reduce((sum, r) => sum + (getMarginFor(service, r[skuIdx] || '') > 0 ? parseFloat(r[extIdx]) * (1 + getMarginFor(service, r[skuIdx] || '') / 100) : 0), 0);
         wsData.push(['Subtotal (0% Margin)', '', black.toFixed(2)]);
         wsData.push(['Subtotal (Markup Applied)', '', green.toFixed(2)]);
-        wsData.push([`Total for ${service} (Tax not Included)`, '', (black + green).toFixed(2)]);
+        wsData.push([`Total for ${service} (Tax not Included)`, '', groupMarkup.toFixed(2)]);
+        const tax = allTaxes[service.trim()] || 0;
+        if (tax > 0) {
+          hasTaxes = true;
+          wsData.push(['Total Tax', '', tax.toFixed(2)]);
+          wsData.push([`Grand Total for ${service} (Including Tax)`, '', (groupMarkup + tax).toFixed(2)]);
+        }
+        grandTotal += groupMarkup + tax;
       });
-
-      // Grand Total
-      const grandTotal = Object.values(groups).flat().reduce((sum, r) => {
-        const ext = parseFloat(r[extIdx]) || 0;
-        const sku = r[skuIdx] || '';
-        const marginPct = getMarginFor(r[serviceIdx], sku);
-        return sum + ext * (1 + marginPct / 100);
-      }, 0);
-      wsData.push(['GRAND TOTAL: (Tax not Included)', '', grandTotal.toFixed(2)]);
-
+      wsData.push([`GRAND TOTAL:${hasTaxes ? ' (Including Tax)' : ' (Tax not Included)'}`, '', grandTotal.toFixed(2)]);
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       XLSX.utils.book_append_sheet(wb, ws, "Markup");
       XLSX.writeFile(wb, "invoice-markup.xlsx");
+    };
+
+    // === PRINT TO PDF - SINGLE MULTI-PAGE WITH TAX DETAILS ON LAST PAGE ===
+    document.getElementById('btnPrintPDF').onclick = () => {
+      if (extIdx === -1) return alert('Import data first');
+
+      const { jsPDF } = window.jspdf;
+      const sel = document.getElementById('filterService').value;
+      const groups = sel ? { [sel]: allGroups[sel] } : allGroups;
+
+      const excludeKeywords = [
+        'po', 'web order id', 'subscription id', 'original invoice', 'original invoice line',
+        'rate price', 'pricing term', 'pa program discount', 'extended amount', 'other charges',
+        'reseller name', 'reseller number', 'reseller site id', 'margin',
+        'end customer site id', 'cisco invoice number', 'unit of measure', 'totals'
+      ];
+
+      const pdfHeaders = headers.filter(h => !excludeKeywords.some(k => String(h).toLowerCase().includes(k)));
+
+      Object.keys(groups).sort().forEach(service => {
+        const safeService = service.trim();
+        const safeName = safeService.replace(/[/\\?%*:|"<>]/g, '_').substring(0, 40);
+
+        const doc = new jsPDF('l', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const margin = 10;
+
+        // Header
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('WEBEX INVOICE', pageWidth / 2, 15, { align: 'center' });
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Workflow Concepts LLC', margin, 12);
+        doc.text('100 Commercial Street', margin, 17);
+        doc.text('Portland, ME 04101', margin, 22);
+        doc.text('billing@workflowconcepts.com', margin, 27);
+
+        doc.setFontSize(11);
+        doc.text(`Billed To: ${safeService}`, margin, 35);
+        doc.text(`Invoice Date: 12/17/2025`, pageWidth - margin, 35, { align: 'right' });
+
+        // Line items
+        const bodyData = [];
+        let subtotal = 0;
+
+        groups[service].forEach(r => {
+          const ext = parseFloat(r[extIdx]) || 0;
+          const sku = r[skuIdx] || '';
+          const marginPct = getMarginFor(safeService, sku);
+          const lineTotal = ext * (1 + marginPct / 100);
+          subtotal += lineTotal;
+
+          const row = pdfHeaders.map(h => {
+            const idx = headers.findIndex(hdr => String(hdr).toLowerCase() === String(h).toLowerCase());
+            let val = r[idx];
+            if (idx === startDateIdx || idx === endDateIdx) val = formatDateToMMDDYY(val);
+            return val !== undefined ? String(val) : '';
+          });
+          row.push(lineTotal.toFixed(2));
+          bodyData.push(row);
+        });
+
+        const fullHeaders = [...pdfHeaders, 'Total'];
+
+        doc.autoTable({
+          head: [fullHeaders],
+          body: bodyData,
+          startY: 42,
+          theme: 'grid',
+          headStyles: { fillColor: [44, 62, 80], fontSize: 9, fontStyle: 'bold' },
+          bodyStyles: { fontSize: 8 },
+          columnStyles: {
+            [fullHeaders.length - 1]: { halign: 'right', fontStyle: 'bold' }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        let currentY = doc.lastAutoTable.finalY + 8;
+        const tax = allTaxes[safeService] || 0;
+        const grandTotal = subtotal + tax;
+
+        doc.autoTable({
+          body: [
+            ['Subtotal', subtotal.toFixed(2)],
+            ['Tax', tax.toFixed(2)],
+            ['Grand Total', grandTotal.toFixed(2)]
+          ],
+          startY: currentY,
+          theme: 'plain',
+          styles: { fontSize: 10, fontStyle: 'bold', cellPadding: 4 },
+          columnStyles: {
+            0: { halign: 'right', cellWidth: 40 },
+            1: { halign: 'right' }
+          },
+          margin: { left: pageWidth - margin - 70 }
+        });
+
+        // Tax Details on new page if exists
+        if (tax > 0 && taxDetails[safeService] && taxDetails[safeService].length > 0) {
+          doc.addPage();
+
+          doc.setFontSize(18);
+          doc.setFont('helvetica', 'bold');
+          doc.text('TAX DETAILS', pageWidth / 2, 15, { align: 'center' });
+
+          doc.setFontSize(11);
+          doc.text(`Customer: ${safeService}`, margin, 25);
+          doc.text(`Invoice Date: 12/17/2025`, pageWidth - margin, 25, { align: 'right' });
+
+          const taxBody = taxDetails[safeService].map(d => [d.lineNo, d.category, d.amount, d.type]);
+
+          doc.autoTable({
+            head: [['Line No', 'Category', 'Amount', 'Type']],
+            body: taxBody,
+            startY: 35,
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80], fontSize: 9, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 8 },
+            columnStyles: {
+              2: { halign: 'right' }
+            },
+            margin: { left: margin, right: margin }
+          });
+
+          let taxFinalY = doc.lastAutoTable.finalY + 8;
+          doc.autoTable({
+            body: [['Total Tax', '', tax.toFixed(2), '']],
+            startY: taxFinalY,
+            theme: 'plain',
+            styles: { fontSize: 11, fontStyle: 'bold' },
+            columnStyles: {
+              0: { halign: 'right', fontStyle: 'bold' },
+              2: { halign: 'right', fontStyle: 'bold' }
+            },
+            margin: { left: pageWidth - margin - 100 }
+          });
+        }
+
+        doc.save(`Webex_Invoice_${safeName}_12-17-2025.pdf`);
+      });
+
+      statusDiv.textContent = 'Webex invoices (with Tax Details on last page) generated successfully!';
     };
   </script>
 </body>
