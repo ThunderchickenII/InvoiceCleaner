@@ -151,10 +151,10 @@
       ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-U-V-FRUS-OB",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-CHAN-V-PORTS",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCE-E",0],
-      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-C",21.03],
-      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-C",21.03],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-C",21.7],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-C",21.7],
       ["ROEHL TRANSPORTHARVEY MILLER","SVS-CSS-SUPT-SSPT",120],
-      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-EACL",21.03],
+      ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-EACL",21.7],
       ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-P-N",0],
       ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCC-S-N",0],
       ["ROEHL TRANSPORTHARVEY MILLER","A-AUD-PSTN-IBTF",0],
@@ -443,48 +443,69 @@
           }
           if (headerRow === -1) throw new Error('Header row not found');
 
-          // Invoice detection
-          invoiceNumber = '—';
-          invoiceMonthYear = '—';
-          for (let r = 0; r < Math.min(50, json.length); r++) {
-            const row = json[r];
-            for (let c = 0; c < row.length; c++) {
-              const cell = String(row[c] || '').trim();
-              if (cell.toUpperCase().includes('INVOICE DATE') ||
-                  (cell.toUpperCase().includes('DATE') && cell.toUpperCase().includes('INVOICE'))) {
-                let dateStr = '';
-                const colonParts = cell.split(':');
-                if (colonParts.length > 1) dateStr = colonParts[1].trim();
-                if (!dateStr && c + 1 < row.length) dateStr = String(row[c + 1] || '').trim();
-                if (!dateStr && r + 1 < json.length && c < json[r + 1].length) dateStr = String(json[r + 1][c] || '').trim();
-                if (dateStr) invoiceMonthYear = formatInvoiceMonthYear(dateStr);
-              }
-              const cellUpper = cell.toUpperCase();
-              const isInvoiceNumLabel =
-                cellUpper === 'INVOICE NO:' ||
-                cellUpper === 'INVOICE #' ||
-                cellUpper === 'INVOICE NUMBER:' ||
-                cellUpper === 'INV NO:' ||
-                cellUpper === 'INV #:';
-              if (isInvoiceNumLabel) {
-                let numStr = '';
-                const colonParts = cell.split(':');
-                if (colonParts.length > 1) numStr = colonParts[1].trim();
-                if (!numStr && c + 1 < row.length) numStr = String(row[c + 1] || '').trim();
-                if (!numStr && r + 1 < json.length && c < json[r + 1].length) numStr = String(json[r + 1][c] || '').trim();
-                if (numStr && numStr.length > 0 && numStr.length < 30 &&
-                    !numStr.toUpperCase().includes('ORIGINAL') &&
-                    !numStr.toUpperCase().includes('LINE') &&
-                    !numStr.toUpperCase().includes('COLUMN')) {
-                  invoiceNumber = numStr;
-                }
-              }
-            }
-          }
-          if (invoiceMonthYear === '—') {
-            const today = new Date();
-            invoiceMonthYear = today.toLocaleDateString('en-US', { month: 'numeric', year: 'numeric' });
-          }
+// === IMPROVED INVOICE NUMBER & DATE DETECTION (AVOID FALSE POSITIVES) ===
+invoiceNumber = '—';
+invoiceMonthYear = '—';
+
+for (let r = 0; r < Math.min(60, json.length); r++) {
+  const row = json[r];
+  for (let c = 0; c < row.length; c++) {
+    const cellText = String(row[c] || '').trim();
+    const cellUpper = cellText.toUpperCase();
+
+    // Invoice Date - keep your working logic
+    if (cellUpper.includes('INVOICE DATE') || (cellUpper.includes('DATE') && cellUpper.includes('INVOICE'))) {
+      let dateStr = '';
+      const colonParts = cellText.split(':');
+      if (colonParts.length > 1) dateStr = colonParts[1].trim();
+      if (!dateStr && c + 1 < row.length) dateStr = String(row[c + 1] || '').trim();
+      if (!dateStr && r + 1 < json.length && c < json[r + 1].length) dateStr = String(json[r + 1][c] || '').trim();
+      if (dateStr) invoiceMonthYear = formatInvoiceMonthYear(dateStr);
+    }
+
+    // SAP Invoice Number - stricter matching, ignore plain "Invoice"
+    const sapPatterns = [
+      'SAP INVOICE NO', 'SAP INVOICE #', 'SAP INVOICE NUMBER',
+      'SAP INV NO', 'SAP INV #', 'SAP INV NUMBER',
+      'INVOICE NO', 'INVOICE #', 'INVOICE NUMBER'  // only if not just "Invoice"
+    ];
+
+    if (sapPatterns.some(p => cellUpper.includes(p)) && !cellUpper.startsWith('INVOICE DATE')) {
+      let numStr = '';
+
+      // 1. Value after colon/space in same cell (most reliable)
+      const parts = cellText.split(/[:\s]{2,}|[:\s]+(?=\d)/); // split on colon or multiple spaces before number
+      if (parts.length > 1) numStr = parts[1].trim();
+
+      // 2. Next cell (very common layout)
+      if (!numStr && c + 1 < row.length) {
+        numStr = String(row[c + 1] || '').trim();
+      }
+
+      // 3. Cell below
+      if (!numStr && r + 1 < json.length && c < json[r + 1].length) {
+        numStr = String(json[r + 1][c] || '').trim();
+      }
+
+      // Extra validation: must contain at least one digit or look like invoice number
+      if (numStr && /\d/.test(numStr) && numStr.length < 30 &&
+          !numStr.toUpperCase().includes('ORIGINAL') &&
+          !numStr.toUpperCase().includes('LINE') &&
+          !numStr.toUpperCase().includes('COLUMN')) {
+        invoiceNumber = numStr;
+        // Optional: stop after first good match
+        break;
+      }
+    }
+  }
+  if (invoiceNumber !== '—') break; // optional: stop early if found
+}
+
+// Final fallback
+if (invoiceMonthYear === '—') {
+  const today = new Date();
+  invoiceMonthYear = today.toLocaleDateString('en-US', { month: 'numeric', year: 'numeric' });
+}
 
           headers = json[headerRow];
           const rows = json.slice(headerRow + 1);
@@ -935,14 +956,22 @@
           doc.setFont('helvetica', 'bold');
           doc.text(`Total Tax $${tax.toFixed(2)}`, pageWidth - margin, taxLastY, { align: 'right' });
         }
-        const fileDate = invoiceMonthYear.replace(/\//g, '-');
-        doc.save(`Webex_Invoice_${safeName}_${invoiceNumber}_${fileDate}.pdf`);
+        // Better filename + clear extension
+		const fileDate = invoiceMonthYear.replace(/\//g, '-');
+		const suggestedFileName = `Webex_Invoice_${safeName}_${invoiceNumber || 'Unknown'}_${fileDate}.pdf`;
+
+		// Show user-friendly message before saving
+		statusDiv.textContent = `Saving invoice for ${safeService}... Choose location if prompted.`;
+
+		// Trigger save (browser should show Save As dialog unless auto-download is enabled)
+		doc.save(suggestedFileName);
       }
       statusDiv.textContent = `Generated ${servicesToPrint.length} separate PDF invoice(s) successfully!`;
     };
   </script>
 </body>
 </html>
+
 
 
 
