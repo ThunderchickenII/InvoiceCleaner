@@ -115,7 +115,7 @@
       ["GUILD MORTGAGE","A-FLEX-WCC-P-N-O",78.13],
       ["GUILD MORTGAGE","A-WXCN-PRM-AUTOINT",20],
       ["GUILD MORTGAGE","SVS-CSS-SUPT-SSPT",20],
-      ["GUILD MORTGAGE","A-FLEX-EACL",41.383],
+      ["GUILD MORTGAGE","A-FLEX-EACL",51.92],
       ["GUILD MORTGAGE","A-FLEX-WCC-P-N",49.1],
       ["GUILD MORTGAGE","A-FLEX-WCC-S-N",49.1],
       ["GUILD MORTGAGE","A-AUD-PSTN-IBTF",0],
@@ -128,7 +128,7 @@
       ["PGT INNOVATIONS","A-FLEX-WCC-S-N-O",171.4],
       ["PGT INNOVATIONS","A-FLEX-WCC-P-N-O",171.4],
       ["PGT INNOVATIONS","SVS-CSS-SUPT-SSPT",120],
-      ["PGT INNOVATIONS","A-FLEX-EACL",53.84],
+      ["PGT INNOVATIONS","A-FLEX-EACL",50.99],
       ["PGT INNOVATIONS","A-FLEX-WCC-P-N",0],
       ["PGT INNOVATIONS","A-FLEX-WCC-S-N",0],
       ["PGT INNOVATIONS","A-AUD-PSTN-IBTF",0],
@@ -137,13 +137,13 @@
       ["PGT INNOVATIONS","A-AUD-U-TN",0],
       ["PGT INNOVATIONS","A-CHAN-U-V-FRUS-OB",0],
       ["PGT INNOVATIONS","A-CHAN-V-PORTS",0],
-      ["PGT INNOVATIONS","A-FLEX-WCE-E",47.75],
+      ["PGT INNOVATIONS","A-FLEX-WCE-E",116.22],
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N-O",43.75],
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N-O",43.75],
       ["LYNN COMMUNITY HEALTH CENTER","SVS-CSS-SUPT-SSPT",20],
-      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-EACL",66.42],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-EACL",92.31],
       ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-P-N",46.55],
-      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N",50.8],
+      ["LYNN COMMUNITY HEALTH CENTER","A-FLEX-WCC-S-N",71.37],
       ["LYNN COMMUNITY HEALTH CENTER","A-AUD-PSTN-IBTF",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-AUD-U-IBTF",0],
       ["LYNN COMMUNITY HEALTH CENTER","A-AUD-OCP1-U",0],
@@ -165,7 +165,7 @@
       ["ROEHL TRANSPORTHARVEY MILLER","A-CHAN-V-PORTS",0],
       ["ROEHL TRANSPORTHARVEY MILLER","A-FLEX-WCE-E",0],
       ["ECO WINDOW SYSTEMS LLC","A-FLEX-NUCL-E",69.58],
-      ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",73.60]
+      ["LYNN COMMUNITY HEALTH CTR","A-FLEX-EACL",92.31]
     ];
 
     // === GLOBAL DATA ===
@@ -229,7 +229,6 @@
         return;
       }
 
-      // Calculate profit (Markup Total - Extended Cost) per customer
       const customerProfits = {};
 
       Object.entries(allGroups).forEach(([service, rows]) => {
@@ -255,7 +254,6 @@
         return;
       }
 
-      // Color palette (cycles if many customers)
       const backgroundColors = [
         '#f28e2c', '#e15759', '#76b7b2', '#59a14f', '#edc949',
         '#af7aa1', '#ff9da7', '#9c755f', '#bab0ab', '#4e79a7',
@@ -296,7 +294,7 @@
                 label: function(context) {
                   const value = context.raw;
                   const percentage = ((value / totalProfit) * 100).toFixed(1);
-                  const label = context.label.split(' ($')[0]; // clean name
+                  const label = context.label.split(' ($')[0];
                   return `${label}: $${value.toFixed(2)} (${percentage}%)`;
                 }
               }
@@ -443,69 +441,52 @@
           }
           if (headerRow === -1) throw new Error('Header row not found');
 
-// === IMPROVED INVOICE NUMBER & DATE DETECTION (AVOID FALSE POSITIVES) ===
-invoiceNumber = '—';
-invoiceMonthYear = '—';
+          // === IMPROVED INVOICE NUMBER & DATE DETECTION ===
+          invoiceNumber = '—';
+          invoiceMonthYear = '—';
+          for (let r = 0; r < Math.min(60, json.length); r++) {
+            const row = json[r];
+            for (let c = 0; c < row.length; c++) {
+              const cellText = String(row[c] || '').trim();
+              const cellUpper = cellText.toUpperCase();
 
-for (let r = 0; r < Math.min(60, json.length); r++) {
-  const row = json[r];
-  for (let c = 0; c < row.length; c++) {
-    const cellText = String(row[c] || '').trim();
-    const cellUpper = cellText.toUpperCase();
+              // Invoice Date
+              if (cellUpper.includes('INVOICE DATE') || (cellUpper.includes('DATE') && cellUpper.includes('INVOICE'))) {
+                let dateStr = '';
+                const colonParts = cellText.split(':');
+                if (colonParts.length > 1) dateStr = colonParts[1].trim();
+                if (!dateStr && c + 1 < row.length) dateStr = String(row[c + 1] || '').trim();
+                if (!dateStr && r + 1 < json.length && c < json[r + 1].length) dateStr = String(json[r + 1][c] || '').trim();
+                if (dateStr) invoiceMonthYear = formatInvoiceMonthYear(dateStr);
+              }
 
-    // Invoice Date - keep your working logic
-    if (cellUpper.includes('INVOICE DATE') || (cellUpper.includes('DATE') && cellUpper.includes('INVOICE'))) {
-      let dateStr = '';
-      const colonParts = cellText.split(':');
-      if (colonParts.length > 1) dateStr = colonParts[1].trim();
-      if (!dateStr && c + 1 < row.length) dateStr = String(row[c + 1] || '').trim();
-      if (!dateStr && r + 1 < json.length && c < json[r + 1].length) dateStr = String(json[r + 1][c] || '').trim();
-      if (dateStr) invoiceMonthYear = formatInvoiceMonthYear(dateStr);
-    }
+              // SAP Invoice Number - stricter
+              const sapPatterns = [
+                'SAP INVOICE NO', 'SAP INVOICE #', 'SAP INVOICE NUMBER',
+                'SAP INV NO', 'SAP INV #', 'SAP INV NUMBER',
+                'INVOICE NO', 'INVOICE #', 'INVOICE NUMBER'
+              ];
 
-    // SAP Invoice Number - stricter matching, ignore plain "Invoice"
-    const sapPatterns = [
-      'SAP INVOICE NO', 'SAP INVOICE #', 'SAP INVOICE NUMBER',
-      'SAP INV NO', 'SAP INV #', 'SAP INV NUMBER',
-      'INVOICE NO', 'INVOICE #', 'INVOICE NUMBER'  // only if not just "Invoice"
-    ];
+              if (sapPatterns.some(p => cellUpper.includes(p)) && !cellUpper.startsWith('INVOICE DATE')) {
+                let numStr = '';
+                const parts = cellText.split(/[:\s]{2,}|[:\s]+(?=\d)/);
+                if (parts.length > 1) numStr = parts[1].trim();
+                if (!numStr && c + 1 < row.length) numStr = String(row[c + 1] || '').trim();
+                if (!numStr && r + 1 < json.length && c < json[r + 1].length) numStr = String(json[r + 1][c] || '').trim();
 
-    if (sapPatterns.some(p => cellUpper.includes(p)) && !cellUpper.startsWith('INVOICE DATE')) {
-      let numStr = '';
-
-      // 1. Value after colon/space in same cell (most reliable)
-      const parts = cellText.split(/[:\s]{2,}|[:\s]+(?=\d)/); // split on colon or multiple spaces before number
-      if (parts.length > 1) numStr = parts[1].trim();
-
-      // 2. Next cell (very common layout)
-      if (!numStr && c + 1 < row.length) {
-        numStr = String(row[c + 1] || '').trim();
-      }
-
-      // 3. Cell below
-      if (!numStr && r + 1 < json.length && c < json[r + 1].length) {
-        numStr = String(json[r + 1][c] || '').trim();
-      }
-
-      // Extra validation: must contain at least one digit or look like invoice number
-      if (numStr && /\d/.test(numStr) && numStr.length < 30 &&
-          !numStr.toUpperCase().includes('ORIGINAL') &&
-          !numStr.toUpperCase().includes('LINE') &&
-          !numStr.toUpperCase().includes('COLUMN')) {
-        invoiceNumber = numStr;
-        // Optional: stop after first good match
-        break;
-      }
-    }
-  }
-  if (invoiceNumber !== '—') break; // optional: stop early if found
-}
-
-// Final fallback
-if (invoiceMonthYear === '—') {
-  const today = new Date();
-  invoiceMonthYear = today.toLocaleDateString('en-US', { month: 'numeric', year: 'numeric' });
-}
+                if (numStr && /\d/.test(numStr) && numStr.length < 30 &&
+                    !numStr.toUpperCase().includes('ORIGINAL') &&
+                    !numStr.toUpperCase().includes('LINE') &&
+                    !numStr.toUpperCase().includes('COLUMN')) {
+                  invoiceNumber = numStr;
+                }
+              }
+            }
+          }
+          if (invoiceMonthYear === '—') {
+            const today = new Date();
+            invoiceMonthYear = today.toLocaleDateString('en-US', { month: 'numeric', year: 'numeric' });
+          }
 
           headers = json[headerRow];
           const rows = json.slice(headerRow + 1);
@@ -523,8 +504,13 @@ if (invoiceMonthYear === '—') {
           startDateIdx = findCol(['Start Date']);
           endDateIdx = findCol(['End Date']);
 
+          // FIXED: Use === for comparison
           if (extIdx === -1 || serviceIdx === -1 || skuIdx === -1) {
-            throw new Error('Missing required columns: Extended Amount, Service To, and/or SKU');
+            const missing = [];
+            if (extIdx === -1) missing.push('Extended Amount');
+            if (serviceIdx === -1) missing.push('Service To');
+            if (skuIdx === -1) missing.push('SKU');
+            throw new Error(`Missing required columns: ${missing.join(', ')}`);
           }
 
           const validRows = rows.filter(r => {
@@ -762,215 +748,223 @@ if (invoiceMonthYear === '—') {
       XLSX.utils.book_append_sheet(wb, ws, "Markup");
       XLSX.writeFile(wb, "invoice-markup.xlsx");
     };
+// === PRINT TO PDF - ONLY SHOW CONSUMPTION/OVERAGE ROWS + TAX ===
+document.getElementById('btnPrintPDF').onclick = async () => {
+  if (extIdx === -1) return alert('Import data first');
+  const sel = document.getElementById('filterService').value;
+  const servicesToPrint = sel ? [sel] : Object.keys(allGroups).sort();
+  if (servicesToPrint.length === 0) return alert('No data to print');
 
-    // === PRINT TO PDF ===
-    document.getElementById('btnPrintPDF').onclick = async () => {
-      if (extIdx === -1) return alert('Import data first');
-      const sel = document.getElementById('filterService').value;
-      const servicesToPrint = sel ? [sel] : Object.keys(allGroups).sort();
-      if (servicesToPrint.length === 0) return alert('No data to print');
-      const { jsPDF } = window.jspdf;
-      let currentYear, currentMonth;
-      if (invoiceMonthYear !== '—') {
-        const parts = invoiceMonthYear.split('/');
-        currentMonth = parseInt(parts[0], 10);
-        currentYear = parseInt(parts[1], 10);
-      } else {
-        const today = new Date();
-        currentMonth = today.getMonth() + 1;
-        currentYear = today.getFullYear();
-      }
-      const logoUrl = 'https://raw.githubusercontent.com/ThunderchickenII/InvoiceCleaner/main/workflow-01.jpg';
-      let logoBase64 = '';
-      try {
-        const response = await fetch(logoUrl);
-        const blob = await response.blob();
-        logoBase64 = await new Promise(r => {
-          const reader = new FileReader();
-          reader.onloadend = () => r(reader.result);
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.warn('Logo failed to load');
-      }
-      for (const service of servicesToPrint) {
-        const doc = new jsPDF({
-          orientation: 'landscape',
-          unit: 'mm',
-          format: 'a4'
-        });
-        const pageWidth = doc.internal.pageSize.getWidth();
-        const margin = 15;
-        const safeService = service.trim();
-        const safeName = safeService.replace(/[/\\?%*:|"<>]/g, '_').substring(0, 40);
-        const tax = allTaxes[safeService] || 0;
-        if (logoBase64) {
-          doc.addImage(logoBase64, 'JPEG', margin, margin, 60, 18);
+  const { jsPDF } = window.jspdf;
+
+  let currentYear, currentMonth;
+  if (invoiceMonthYear !== '—') {
+    const parts = invoiceMonthYear.split('/');
+    currentMonth = parseInt(parts[0], 10);
+    currentYear = parseInt(parts[1], 10);
+  } else {
+    const today = new Date();
+    currentMonth = today.getMonth() + 1;
+    currentYear = today.getFullYear();
+  }
+
+  const logoUrl = 'https://raw.githubusercontent.com/ThunderchickenII/InvoiceCleaner/main/workflow-01.jpg';
+  let logoBase64 = '';
+  try {
+    const response = await fetch(logoUrl);
+    const blob = await response.blob();
+    logoBase64 = await new Promise(r => {
+      const reader = new FileReader();
+      reader.onloadend = () => r(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.warn('Logo failed to load');
+  }
+
+  for (const service of servicesToPrint) {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 15;
+    const safeService = service.trim();
+    const safeName = safeService.replace(/[/\\?%*:|"<>]/g, '_').substring(0, 40);
+    const tax = allTaxes[safeService] || 0;
+
+    // Header (unchanged)
+    if (logoBase64) {
+      doc.addImage(logoBase64, 'JPEG', margin, margin, 60, 18);
+    }
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Workflow Concepts', pageWidth - margin, margin + 5, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('PO Box 1333', pageWidth - margin, margin + 10, { align: 'right' });
+    doc.text('Scarborough ME, 04074', pageWidth - margin, margin + 15, { align: 'right' });
+    doc.text('accounting@workflowconcepts.com', pageWidth - margin, margin + 20, { align: 'right' });
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`SAP Invoice No: ${invoiceNumber}`, pageWidth - margin, margin + 28, { align: 'right' });
+
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('WEBEX INVOICE', pageWidth / 2, margin + 10, { align: 'center' });
+
+    // NEW: Smaller centered subtitle right below the main title
+    doc.setFontSize(12);                  // Slightly smaller than 18pt
+    doc.setFont('helvetica', 'bold');   // Regular weight for contrast
+    doc.text('Consumption-Overages-Taxes', pageWidth / 2, margin + 18, { align: 'center' });	
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Billed To: ${safeService}`, margin, margin + 35);
+    doc.text(`Invoice Date: ${invoiceMonthYear}`, pageWidth - margin, margin + 35, { align: 'right' });
+
+    // ────────────────────────────────────────────────────────
+    // ONLY include rows from PRIOR periods
+    // ────────────────────────────────────────────────────────
+    const tableBody = [];   // ← declared only once
+    let consumptionOverageSubtotal = 0;
+    const previousRows = [];
+
+    allGroups[service].forEach(r => {
+      const startDateVal = r[startDateIdx];
+      let itemMonth = null;
+      let itemYear = null;
+      let sortKey = 0;
+
+      if (typeof startDateVal === 'number') {
+        const date = XLSX.SSF.parse_date_code(startDateVal);
+        if (date) {
+          itemMonth = date.m;
+          itemYear = date.y;
+          sortKey = date.y * 100 + date.m;
         }
-        doc.setFontSize(11);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Workflow Concepts', pageWidth - margin, margin + 5, { align: 'right' });
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.text('PO Box 1333', pageWidth - margin, margin + 10, { align: 'right' });
-        doc.text('Scarborough ME, 04074', pageWidth - margin, margin + 15, { align: 'right' });
-        doc.text('accounting@workflowconcepts.com', pageWidth - margin, margin + 20, { align: 'right' });
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`SAP Invoice No: ${invoiceNumber}`, pageWidth - margin, margin + 28, { align: 'right' });
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('WEBEX INVOICE', pageWidth / 2, margin + 10, { align: 'center' });
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Billed To: ${safeService}`, margin, margin + 35);
-        doc.text(`Invoice Date: ${invoiceMonthYear}`, pageWidth - margin, margin + 35, { align: 'right' });
-        const currentRows = [];
-        const previousRows = [];
-        let licensedMonthly = 0;
-        let consumptionOverageSubtotal = 0;
-        allGroups[service].forEach(r => {
-          const startDateVal = r[startDateIdx];
-          let itemMonth = null;
-          let itemYear = null;
-          let sortKey = 0;
-          if (typeof startDateVal === 'number') {
-            const date = XLSX.SSF.parse_date_code(startDateVal);
-            if (date) {
-              itemMonth = date.m;
-              itemYear = date.y;
-              sortKey = date.y * 100 + date.m;
-            }
-          } else if (typeof startDateVal === 'string') {
-            const match = startDateVal.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
-            if (match) {
-              itemMonth = parseInt(match[1], 10);
-              const y = parseInt(match[3], 10);
-              itemYear = y < 100 ? 2000 + y : y;
-              sortKey = itemYear * 100 + itemMonth;
-            }
-          }
-          const ext = parseFloat(r[extIdx]) || 0;
-          const sku = r[skuIdx] || '';
-          const marginPct = getMarginFor(service, sku);
-          const totalWithMarkup = ext * (1 + marginPct / 100);
-          const rowData = [
-            r[headers.findIndex(h => h?.toLowerCase().includes('sku'))] || '',
-            r[headers.findIndex(h => h?.toLowerCase().includes('description'))] || '',
-            r[serviceIdx] || '',
-            formatDateToMMDDYY(r[startDateIdx]) || '',
-            formatDateToMMDDYY(r[endDateIdx]) || '',
-            r[headers.findIndex(h => h?.toLowerCase().includes('duration'))] ?? '',
-            r[headers.findIndex(h => h?.toLowerCase().includes('qty'))] || '',
-            totalWithMarkup.toFixed(2)
-          ];
-          const isCurrent = (itemMonth === currentMonth && itemYear === currentYear);
-          if (isCurrent) {
-            currentRows.push(rowData);
-            licensedMonthly += totalWithMarkup;
-          } else if (itemYear && (itemYear < currentYear || (itemYear === currentYear && itemMonth < currentMonth))) {
-            previousRows.push({ data: rowData, sortKey });
-            consumptionOverageSubtotal += totalWithMarkup;
-          }
-        });
-        previousRows.sort((a, b) => b.sortKey - a.sortKey);
-        const tableBody = [
-          ...currentRows,
-          ...previousRows.map(r => r.data)
+      } else if (typeof startDateVal === 'string') {
+        const match = startDateVal.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+        if (match) {
+          itemMonth = parseInt(match[1], 10);
+          const y = parseInt(match[3], 10);
+          itemYear = y < 100 ? 2000 + y : y;
+          sortKey = itemYear * 100 + itemMonth;
+        }
+      }
+
+      const ext = parseFloat(r[extIdx]) || 0;
+      const sku = r[skuIdx] || '';
+      const marginPct = getMarginFor(service, sku);
+      const totalWithMarkup = ext * (1 + marginPct / 100);
+
+      if (itemYear && (itemYear < currentYear || (itemYear === currentYear && itemMonth < currentMonth))) {
+        const rowData = [
+          r[headers.findIndex(h => h?.toLowerCase().includes('sku'))] || '',
+          r[headers.findIndex(h => h?.toLowerCase().includes('description'))] || '',
+          r[serviceIdx] || '',
+          formatDateToMMDDYY(r[startDateIdx]) || '',
+          formatDateToMMDDYY(r[endDateIdx]) || '',
+          r[headers.findIndex(h => h?.toLowerCase().includes('duration'))] ?? '',
+          r[headers.findIndex(h => h?.toLowerCase().includes('qty'))] || '',
+          totalWithMarkup.toFixed(2)
         ];
-        let startY = margin + 45;
-        doc.autoTable({
-          head: [["SKU", "Description", "Service To", "Start Date", "End Date", "Duration Month(s)", "Qty", "Total"]],
-          body: tableBody,
-          startY: startY,
-          theme: 'grid',
-          headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 9 },
-          styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', textColor: [0, 0, 0] },
-          columnStyles: {
-            0: { halign: 'left' },
-            1: { halign: 'left' },
-            2: { halign: 'left' },
-            3: { halign: 'center' },
-            4: { halign: 'center' },
-            5: { halign: 'center' },
-            6: { halign: 'right' },
-            7: { halign: 'right' }
-          },
-          margin: { left: margin, right: margin },
-          didParseCell: function(data) {
-            if (data.row.section === 'body' && data.column.index === 1) {
-              data.cell.styles.fontSize = 7.5;
-            }
-            if (data.row.section === 'body' && data.row.index >= currentRows.length) {
-              data.cell.styles.textColor = [0, 0, 255];
-            }
-          }
-        });
-        const overallSubtotal = licensedMonthly + consumptionOverageSubtotal;
-        const grandTotal = overallSubtotal + tax;
-        let y = doc.lastAutoTable.finalY + 8;
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        if (licensedMonthly > 0) {
-          doc.setTextColor(0, 0, 0);
-          doc.text('Licensed Monthly', margin + 10, y);
-          doc.text(`$${licensedMonthly.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
-          y += 6;
-        }
-        if (consumptionOverageSubtotal > 0) {
-          doc.setTextColor(0, 0, 255);
-          doc.setFont('helvetica', 'bold');
-          doc.text('Consumption/Overages Subtotal (bill in arrears)', margin + 10, y);
-          doc.text(`$${consumptionOverageSubtotal.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
-          y += 8;
-        }
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(11);
-        doc.text(`Subtotal $${overallSubtotal.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
-        y += 6;
-        doc.text(`Tax $${tax.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
-        y += 7;
-        doc.setFontSize(13);
-        doc.text(`Grand Total $${grandTotal.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
-        if (tax > 0 && taxDetails[safeService]) {
-          doc.addPage();
-          doc.setFontSize(18);
-          doc.setFont('helvetica', 'bold');
-          doc.text('TAX DETAILS', pageWidth / 2, margin + 5, { align: 'center' });
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'bold');
-          doc.text(`Customer: ${safeService}`, margin, margin + 15);
-          doc.text(`Invoice Date: ${invoiceMonthYear}`, pageWidth - margin, margin + 15, { align: 'right' });
-          const taxBody = taxDetails[safeService].map(d => [d.lineNo, d.category, d.amount, d.type]);
-          doc.autoTable({
-            head: [['Line No', 'Category', 'Amount', 'Type']],
-            body: taxBody,
-            startY: margin + 22,
-            theme: 'grid',
-            headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 8 },
-            styles: { fontSize: 7.5, cellPadding: 1.5 },
-            margin: { left: margin, right: margin }
-          });
-          const taxLastY = doc.lastAutoTable.finalY + 5;
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'bold');
-          doc.text(`Total Tax $${tax.toFixed(2)}`, pageWidth - margin, taxLastY, { align: 'right' });
-        }
-        // Better filename + clear extension
-		const fileDate = invoiceMonthYear.replace(/\//g, '-');
-		const suggestedFileName = `Webex_Invoice_${safeName}_${invoiceNumber || 'Unknown'}_${fileDate}.pdf`;
-
-		// Show user-friendly message before saving
-		statusDiv.textContent = `Saving invoice for ${safeService}... Choose location if prompted.`;
-
-		// Trigger save (browser should show Save As dialog unless auto-download is enabled)
-		doc.save(suggestedFileName);
+        previousRows.push({ data: rowData, sortKey });
+        consumptionOverageSubtotal += totalWithMarkup;
       }
-      statusDiv.textContent = `Generated ${servicesToPrint.length} separate PDF invoice(s) successfully!`;
-    };
+    });
+
+    previousRows.sort((a, b) => b.sortKey - a.sortKey);
+
+    // FIXED: No second 'const' — just assign
+    tableBody.push(...previousRows.map(r => r.data));
+
+    // Generate table
+    let startY = margin + 45;
+
+    doc.autoTable({
+      head: [["SKU", "Description", "Service To", "Start Date", "End Date", "Duration Month(s)", "Qty", "Total"]],
+      body: tableBody,
+      startY: startY,
+      theme: 'grid',
+      headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 9 },
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak', textColor: [0, 0, 0] },
+      columnStyles: {
+        0: { halign: 'left' },
+        1: { halign: 'left' },
+        2: { halign: 'left' },
+        3: { halign: 'center' },
+        4: { halign: 'center' },
+        5: { halign: 'center' },
+        6: { halign: 'right' },
+        7: { halign: 'right' }
+      },
+      margin: { left: margin, right: margin },
+      didParseCell: function(data) {
+        if (data.row.section === 'body' && data.column.index === 1) {
+          data.cell.styles.fontSize = 7.5;
+        }
+        if (data.row.section === 'body') {
+          data.cell.styles.textColor = [0, 0, 255];
+        }
+      }
+    });
+
+    const subtotal = consumptionOverageSubtotal;
+    const grandTotal = subtotal + tax;
+
+    let y = doc.lastAutoTable.finalY + 8;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Subtotal (Consumption/Overages) $${subtotal.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
+    y += 6;
+    doc.text(`Tax $${tax.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
+    y += 7;
+    doc.setFontSize(13);
+    doc.text(`Grand Total $${grandTotal.toFixed(2)}`, pageWidth - margin, y, { align: 'right' });
+
+    // Tax details page (unchanged)
+    if (tax > 0 && taxDetails[safeService]) {
+      doc.addPage();
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TAX DETAILS', pageWidth / 2, margin + 5, { align: 'center' });
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Customer: ${safeService}`, margin, margin + 15);
+      doc.text(`Invoice Date: ${invoiceMonthYear}`, pageWidth - margin, margin + 15, { align: 'right' });
+
+      const taxBody = taxDetails[safeService].map(d => [d.lineNo, d.category, d.amount, d.type]);
+      doc.autoTable({
+        head: [['Line No', 'Category', 'Amount', 'Type']],
+        body: taxBody,
+        startY: margin + 22,
+        theme: 'grid',
+        headStyles: { fillColor: [44, 62, 80], textColor: 255, fontStyle: 'bold', halign: 'center', fontSize: 8 },
+        styles: { fontSize: 7.5, cellPadding: 1.5 },
+        margin: { left: margin, right: margin }
+      });
+
+      const taxLastY = doc.lastAutoTable.finalY + 5;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Total Tax $${tax.toFixed(2)}`, pageWidth - margin, taxLastY, { align: 'right' });
+    }
+
+    const fileDate = invoiceMonthYear.replace(/\//g, '-');
+    doc.save(`Webex_Invoice_${safeName}_${invoiceNumber}_${fileDate}.pdf`);
+  }
+
+  statusDiv.textContent = `Generated ${servicesToPrint.length} separate PDF invoice(s) successfully!`;
+};   
   </script>
 </body>
 </html>
+
 
 
 
