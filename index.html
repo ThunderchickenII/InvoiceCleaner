@@ -809,7 +809,7 @@ document.getElementById('btnPrintPDF').onclick = async () => {
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text(`SAP Invoice No: ${invoiceNumber}`, pageWidth - margin, margin + 28, { align: 'right' });
+    doc.text(`SAP No: ${invoiceNumber}`, pageWidth - margin, margin + 28, { align: 'right' });
 
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
@@ -964,6 +964,7 @@ document.getElementById('btnPrintPDF').onclick = async () => {
   </script>
 </body>
 </html>
+
 
 
 
