@@ -57,10 +57,10 @@
 </head>
 <body>
   <div class="container">
-    <h1> Markup Tool</h1>
+    <h1>Invoice Markup Tool</h1>
     <div class="controls">
       <input type="file" id="fileInput" accept=".xlsx" />
-      <button id="btnImport">Import </button>
+      <button id="btnImport">Import Invoice</button>
       <input type="file" id="taxInput" accept=".xlsx" />
       <button id="btnImportTax">Import Tax</button>
       <button id="btnClear">Clear Data</button>
@@ -73,7 +73,7 @@
     </div>
 
     <div id="status"></div>
-    <h2>Processed </h2>
+    <h2>Processed Invoice</h2>
     <div id="output"></div>
 
     <!-- Pie Chart Section - Profit/Margin by Customer -->
@@ -169,8 +169,8 @@
     ];
 
     // === GLOBAL DATA ===
-    let Number = '—';
-    let MonthYear = '—';
+    let invoiceNumber = '—';
+    let invoiceMonthYear = '—';
     let allGroups = {}, allTaxes = {}, taxDetails = {}, headers = [];
     let extIdx = -1, serviceIdx = -1, skuIdx = -1;
     let startDateIdx = -1, endDateIdx = -1;
@@ -198,7 +198,7 @@
       return val;
     }
 
-    function formatMonthYear(val) {
+    function formatInvoiceMonthYear(val) {
       if (!val) return '';
       if (typeof val === 'number') {
         const date = XLSX.SSF.parse_date_code(val);
@@ -419,7 +419,7 @@
       reader.readAsText(file);
     };
 
-    // === IMPORT  ===
+    // === IMPORT INVOICE ===
     document.getElementById('btnImport').onclick = () => {
       const file = document.getElementById('fileInput').files[0];
       if (!file) return alert("Select file");
@@ -430,7 +430,7 @@
           const data = new Uint8Array(e.target.result);
           const wb = XLSX.read(data, { type: 'array' });
           const sheetName = Object.keys(wb.Sheets).find(n => n.toLowerCase().includes('consolidated'));
-          if (!sheetName) throw new Error('No Consolidated sheet');
+          if (!sheetName) throw new Error('No ConsolidatedInvoice sheet');
           const sheet = wb.Sheets[sheetName];
           const json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
           let headerRow = -1;
@@ -441,17 +441,17 @@
           }
           if (headerRow === -1) throw new Error('Header row not found');
 
-          // === IMPROVED  NUMBER & DATE DETECTION ===
-          Number = '—';
-          MonthYear = '—';
+          // === IMPROVED INVOICE NUMBER & DATE DETECTION ===
+          invoiceNumber = '—';
+          invoiceMonthYear = '—';
           for (let r = 0; r < Math.min(60, json.length); r++) {
             const row = json[r];
             for (let c = 0; c < row.length; c++) {
               const cellText = String(row[c] || '').trim();
               const cellUpper = cellText.toUpperCase();
 
-              //  Date
-              if (cellUpper.includes(' DATE') || (cellUpper.includes('DATE') && cellUpper.includes(''))) {
+              // Invoice Date
+              if (cellUpper.includes('INVOICE DATE') || (cellUpper.includes('DATE') && cellUpper.includes('INVOICE'))) {
                 let dateStr = '';
                 const colonParts = cellText.split(':');
                 if (colonParts.length > 1) dateStr = colonParts[1].trim();
@@ -936,7 +936,7 @@ document.getElementById('btnPrintPDF').onclick = async () => {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text(`Customer: ${safeService}`, margin, margin + 15);
-      doc.text(`Invoice Date: ${invoiceMonthYear}`, pageWidth - margin, margin + 15, { align: 'right' });
+      doc.text(`Billing Date: ${invoiceMonthYear}`, pageWidth - margin, margin + 15, { align: 'right' });
 
       const taxBody = taxDetails[safeService].map(d => [d.lineNo, d.category, d.amount, d.type]);
       doc.autoTable({
@@ -964,10 +964,3 @@ document.getElementById('btnPrintPDF').onclick = async () => {
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
